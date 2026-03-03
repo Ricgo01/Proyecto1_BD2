@@ -1,0 +1,25 @@
+# Se prefiere el archivo `compose.yaml` (en lugar de docker-compose.yml) según las nuevas normativas de la versión más reciente la especificación de Docker Compose
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - MONGO_URI=${MONGO_URI} # Toma el valor de tu archivo .env para conectarse a Atlas
+    volumes:
+      # Monta tu código local en el contenedor (útil para ver cambios en tiempo real con nodemon sin reconstruir)
+      - .:/usr/src/app
+      # Volumen anónimo para preservar la carpeta _interna_ de node_modules del contenedor sobreescribiendo el montaje en volumen de la línea anterior
+      - /usr/src/app/node_modules
+    # Usando Docker Compose Watch (opcional super actual de Compose, reemplaza el uso convencional de nodemon en ambientes grandes)
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /usr/src/app
+          ignore:
+            - node_modules/
+        - action: rebuild
+          path: package.json
