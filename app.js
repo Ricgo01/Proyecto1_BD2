@@ -22,7 +22,13 @@ mongoose
   .then(() => console.log("✅ Conectado a MongoDB"))
   .catch((err) => console.error("❌ Error al conectar a MongoDB:", err));
 
-// Rutas
+// Importar rutas
+const apiRoutes = require("./src/routes");
+
+// Rutas de API
+app.use("/api", apiRoutes);
+
+// Rutas de vistas EJS
 app.get("/", (req, res) => {
   res.render("index", { title: "Proyecto 1 - BD2" });
 });
