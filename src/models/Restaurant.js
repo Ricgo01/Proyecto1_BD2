@@ -18,4 +18,7 @@ const RestaurantSchema = new mongoose.Schema({
 // Índice geoespacial para búsquedas por ubicación
 RestaurantSchema.index({ location: '2dsphere' });
 
+// Índice de texto para búsquedas por nombre y categorías
+RestaurantSchema.index({ name: 'text', categories: 'text' });
+
 module.exports = mongoose.model('Restaurant', RestaurantSchema);

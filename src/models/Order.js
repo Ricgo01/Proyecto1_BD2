@@ -28,4 +28,10 @@ OrderSchema.pre('save', function (next) {
   next();
 });
 
+// Índice compuesto para listar pedidos recientes por restaurante
+OrderSchema.index({ restaurantId: 1, createdAt: -1 });
+
+// Índice multikey para reportes de platillos más vendidos
+OrderSchema.index({ 'items.menuItemId': 1 });
+
 module.exports = mongoose.model('Order', OrderSchema);

@@ -9,4 +9,7 @@ const ReviewSchema = new mongoose.Schema({
   createdAt:    { type: Date, default: Date.now }
 });
 
+// Índice simple para optimizar consultas de reseñas por restaurante
+ReviewSchema.index({ restaurantId: 1 });
+
 module.exports = mongoose.model('Review', ReviewSchema);
