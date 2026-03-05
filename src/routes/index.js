@@ -12,6 +12,7 @@ const menuItemRoutes = require('./menuItemRoutes');
 const orderRoutes = require('./orderRoutes');
 const reviewRoutes = require('./reviewRoutes');
 const reportRoutes = require('./reportRoutes');
+const transactionRoutes = require('./transactionRoutes');
 
 // Montar rutas
 router.use('/users', userRoutes);
@@ -20,6 +21,7 @@ router.use('/menu-items', menuItemRoutes);
 router.use('/orders', orderRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/reports', reportRoutes);
+router.use('/transactions', transactionRoutes);
 
 // Ruta raíz de API
 router.get('/', (req, res) => {
@@ -32,7 +34,8 @@ router.get('/', (req, res) => {
       menuItems: '/api/menu-items',
       orders: '/api/orders',
       reviews: '/api/reviews',
-      reports: '/api/reports'
+      reports: '/api/reports',
+      transactions: '/api/transactions'
     }
   });
 });
