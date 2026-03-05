@@ -1,11 +1,11 @@
+require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const MONGO_URI =
-  process.env.MONGO_URI || "mongodb://localhost:27017/proyecto1";
+const MONGO_URI = process.env.MONGO_URI;
 
 // Configuración de EJS
 app.set("view engine", "ejs");
