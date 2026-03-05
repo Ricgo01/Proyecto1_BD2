@@ -1,14 +1,13 @@
 # Proyecto 1 - Base de Datos 2
 ## Sistema de Gestión de Pedidos y Reseñas de Restaurantes
 
-### 📋 Descripción
+###  Descripción
 Sistema completo de gestión de restaurantes, menú, pedidos y reseñas implementado con Node.js, Express, MongoDB Atlas y EJS. Incluye operaciones CRUD, agregaciones complejas, transacciones multi-documento, y optimización mediante índices.
 
 ---
 
-## 🚀 Inicio Rápido
 
-### Prerrequisitos
+## Prerrequisitos
 - Node.js 16+
 - Cuenta de MongoDB Atlas (ya configurada)
 
@@ -39,7 +38,7 @@ El servidor estará disponible en: **http://localhost:3000**
 
 ---
 
-## 📊 Estructura del Proyecto
+##  Estructura del Proyecto
 
 ```
 Proyecto1_BD2/
@@ -89,7 +88,7 @@ Proyecto1_BD2/
 
 ---
 
-## 🗄️ Modelos de Datos
+##  Modelos de Datos
 
 ### Users
 - `_id`: ObjectId
@@ -154,9 +153,9 @@ Proyecto1_BD2/
 
 ---
 
-## 🔗 API Endpoints
+##  API Endpoints
 
-### 📍 Base URL: `/api`
+###  Base URL: `/api`
 
 ### **Users** (`/api/users`)
 | Método | Endpoint | Descripción |
@@ -249,7 +248,7 @@ Proyecto1_BD2/
 
 ---
 
-## 📈 Aggregation Pipelines Implementados
+##  Aggregation Pipelines Implementados
 
 ### 1. Top Platillos Más Vendidos
 ```javascript
@@ -283,7 +282,7 @@ GET /api/reports/sales-by-category
 
 ---
 
-## 🔐 Transacciones Multi-Documento
+##  Transacciones Multi-Documento
 
 ### Transacción 1: Crear Reseña + Actualizar Rating
 **Endpoint:** `POST /api/transactions/review-with-rating`
@@ -311,7 +310,7 @@ GET /api/reports/sales-by-category
 
 ---
 
-## 🔍 Índices Implementados
+##  Índices Implementados
 
 | Colección | Tipo | Índice | Propósito |
 |-----------|------|--------|-----------|
@@ -329,7 +328,7 @@ node src/scripts/createIndexes.js
 
 ---
 
-## 🧪 Operadores MongoDB Demostrados
+##  Operadores MongoDB Demostrados
 
 ### Operadores de Array
 - **$push**: Agregar item a carrito → `POST /api/orders/:id/items`
@@ -352,7 +351,7 @@ node src/scripts/createIndexes.js
 
 ---
 
-## 📊 Datos Masivos
+##  Datos Masivos
 
 El script `seed.js` genera automáticamente:
 - **500** usuarios
@@ -369,7 +368,7 @@ npm run seed
 
 ---
 
-## 🎯 Shard Key Propuesta
+##  Shard Key Propuesta
 
 **Colección:** `Orders`  
 **Shard Key:** `{ restaurantId: 1, createdAt: 1 }`
@@ -381,7 +380,7 @@ npm run seed
 
 ---
 
-## 🔧 Query Analysis & Explain
+##  Query Analysis & Explain
 
 ### Analizar cualquier query
 ```javascript
@@ -409,7 +408,7 @@ GET /api/query-analysis/demonstrate
 
 ---
 
-## 📝 Comandos Útiles
+##  Comandos Útiles
 
 ```bash
 # Poblar base de datos
@@ -430,47 +429,9 @@ git log --oneline
 
 ---
 
-## 📦 Commits del Proyecto
 
-Cada feature está en un commit separado:
-
-1. ✅ Configure MongoDB Atlas connection with .env file
-2. ✅ Add all required indexes and verification script
-3. ✅ Implement aggregation pipelines and analytics services
-4. ✅ Implement complete CRUD controllers for all entities
-5. ✅ Create complete REST API routes for all entities
-6. ✅ Implement multi-document transactions with sessions
-7. ✅ Add query analysis and explain() utilities
-
----
-
-## 🎓 Características Destacadas
-
-✅ **CRUD Completo** para todas las entidades  
-✅ **5 tipos de índices** (simple, compuesto, multikey, texto, geoespacial)  
-✅ **Agregaciones complejas** con pipelines de 4-6 etapas  
-✅ **2 transacciones multi-documento** con rollback  
-✅ **Documentos embebidos** (items en orders)  
-✅ **Documentos referenciados** (foreign keys)  
-✅ **Operadores de array** ($push, $pull, $addToSet)  
-✅ **Búsqueda de texto completo**  
-✅ **Búsqueda geoespacial** (restaurantes cercanos)  
-✅ **Query analysis** con .explain()  
-✅ **50,000+ documentos** de prueba  
-✅ **Paginación, ordenamiento, proyección**  
-✅ **Validación de datos**  
-✅ **Propuesta de Shard Key**  
-
----
-
-## 👥 Autores
+## Autores
 
 **Proyecto 1 - Base de Datos 2**  
 Universidad del Valle de Guatemala  
 2026
-
----
-
-## 📄 Licencia
-
-Este proyecto es parte de un trabajo académico.
