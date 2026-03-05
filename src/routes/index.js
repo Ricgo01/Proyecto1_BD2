@@ -13,6 +13,7 @@ const orderRoutes = require('./orderRoutes');
 const reviewRoutes = require('./reviewRoutes');
 const reportRoutes = require('./reportRoutes');
 const transactionRoutes = require('./transactionRoutes');
+const queryAnalysisRoutes = require('./queryAnalysisRoutes');
 
 // Montar rutas
 router.use('/users', userRoutes);
@@ -22,6 +23,7 @@ router.use('/orders', orderRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/reports', reportRoutes);
 router.use('/transactions', transactionRoutes);
+router.use('/query-analysis', queryAnalysisRoutes);
 
 // Ruta raíz de API
 router.get('/', (req, res) => {
@@ -35,7 +37,8 @@ router.get('/', (req, res) => {
       orders: '/api/orders',
       reviews: '/api/reviews',
       reports: '/api/reports',
-      transactions: '/api/transactions'
+      transactions: '/api/transactions',
+      queryAnalysis: '/api/query-analysis'
     }
   });
 });
