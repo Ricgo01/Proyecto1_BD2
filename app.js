@@ -19,8 +19,8 @@ app.use(express.static(path.join(__dirname, "public")));
 // Conexión a MongoDB
 mongoose
   .connect(MONGO_URI)
-  .then(() => console.log("✅ Conectado a MongoDB"))
-  .catch((err) => console.error("❌ Error al conectar a MongoDB:", err));
+  .then(() => console.log("Conectado a MongoDB"))
+  .catch((err) => console.error("Error al conectar a MongoDB:", err));
 
 // Importar rutas
 const apiRoutes = require("./src/routes");
@@ -35,5 +35,5 @@ app.get("/", (req, res) => {
 
 // Levantar el servidor
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+  console.log(` Servidor corriendo en http://localhost:${PORT}`);
 });
