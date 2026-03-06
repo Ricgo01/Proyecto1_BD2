@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 /**
  * CREATE - Crear nuevo restaurante
  */
-exports.createRestaurant = async (req, res) => {
+exports.createRestaurant = async (req, res, next) => {
   try {
     const { name, address, owner_id, location, categories } = req.body;
     
@@ -34,10 +34,7 @@ exports.createRestaurant = async (req, res) => {
       restaurant 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al crear restaurante', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -45,11 +42,12 @@ exports.createRestaurant = async (req, res) => {
  * READ - Obtener todos los restaurantes
  * Soporta: filtros, proyección, ordenamiento, paginación
  */
-exports.getAllRestaurants = async (req, res) => {
+exports.getAllRestaurants = async (req, res, next) => {
   try {
     const { 
       category,
       minRating,
+      q,
       page = 1, 
       limit = 20, 
       sortBy = 'avgRating', 
@@ -59,8 +57,9 @@ exports.getAllRestaurants = async (req, res) => {
 
     // Construir filtro
     const filter = {};
-    if (category) filter.categories = category;
+    if (category) filter.categories = { $regex: category, $options: 'i' };
     if (minRating) filter.avgRating = { $gte: parseFloat(minRating) };
+    if (q) filter.name = { $regex: q, $options: 'i' };
 
     // Proyección
     const projection = fields ? fields.split(',').join(' ') : '';
@@ -91,17 +90,14 @@ exports.getAllRestaurants = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener restaurantes', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Obtener restaurante por ID
  */
-exports.getRestaurantById = async (req, res) => {
+exports.getRestaurantById = async (req, res, next) => {
   try {
     const restaurant = await Restaurant.findById(req.params.id)
       .populate('owner_id', 'name email');
@@ -112,17 +108,14 @@ exports.getRestaurantById = async (req, res) => {
     
     res.json({ restaurant });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener restaurante', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Actualizar restaurante
  */
-exports.updateRestaurant = async (req, res) => {
+exports.updateRestaurant = async (req, res, next) => {
   try {
     const updates = req.body;
     
@@ -141,17 +134,14 @@ exports.updateRestaurant = async (req, res) => {
       restaurant 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al actualizar restaurante', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * DELETE - Eliminar restaurante
  */
-exports.deleteRestaurant = async (req, res) => {
+exports.deleteRestaurant = async (req, res, next) => {
   try {
     const restaurant = await Restaurant.findByIdAndDelete(req.params.id);
     
@@ -164,17 +154,14 @@ exports.deleteRestaurant = async (req, res) => {
       restaurant 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar restaurante', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Búsqueda de texto en restaurantes
  */
-exports.searchRestaurants = async (req, res) => {
+exports.searchRestaurants = async (req, res, next) => {
   try {
     const { q, limit = 20 } = req.query;
     
@@ -196,17 +183,14 @@ exports.searchRestaurants = async (req, res) => {
       restaurants 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error en búsqueda de texto', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Búsqueda geoespacial (restaurantes cercanos)
  */
-exports.getNearbyRestaurants = async (req, res) => {
+exports.getNearbyRestaurants = async (req, res, next) => {
   try {
     const { lng, lat, maxDistance = 5000, limit = 20 } = req.query;
     
@@ -237,17 +221,14 @@ exports.getNearbyRestaurants = async (req, res) => {
       restaurants 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error en búsqueda geoespacial', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Agregar categoría única (usando $addToSet)
  */
-exports.addCategory = async (req, res) => {
+exports.addCategory = async (req, res, next) => {
   try {
     const { category } = req.body;
     
@@ -270,17 +251,14 @@ exports.addCategory = async (req, res) => {
       restaurant 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al agregar categoría', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Remover categoría
  */
-exports.removeCategory = async (req, res) => {
+exports.removeCategory = async (req, res, next) => {
   try {
     const { category } = req.body;
     
@@ -303,9 +281,6 @@ exports.removeCategory = async (req, res) => {
       restaurant 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al remover categoría', 
-      details: error.message 
-    });
+    next(error);
   }
 };

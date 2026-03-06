@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Crear Item de Menu</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    .suggestion-box { position:absolute; z-index:1000; width:100%; max-height:200px; overflow-y:auto; }
+    .suggestion-item { cursor:pointer; padding:8px 12px; border-bottom:1px solid #eee; background:#fff; }
+    .suggestion-item:hover { background:#f0f4ff; }
+  </style>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+  <div class="container py-4" style="max-width:600px">
+    <a href="/menu" class="btn btn-sm btn-outline-secondary mb-3">← Volver</a>
+    <h2 class="mb-4">Nuevo Item de Menu</h2>
+    <div id="alert" class="d-none"></div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <form id="form-create">
+          <!-- Restaurant search -->
+          <div class="mb-3 position-relative">
+            <label class="form-label fw-semibold">Restaurante *</label>
+            <input type="text" id="restaurant-search" class="form-control" required placeholder="Escribe para buscar restaurante..." autocomplete="off"/>
+            <input type="hidden" id="restaurantId"/>
+            <div id="restaurant-suggestions" class="suggestion-box border rounded d-none"></div>
+            <div id="restaurant-selected" class="mt-1 small text-success d-none"></div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre *</label>
+            <input type="text" id="name" class="form-control" required placeholder="Ej: Taco de Carnitas"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Precio *</label>
+            <input type="number" id="price" class="form-control" required step="0.01" min="0" placeholder="35.50"/>
+          </div>
+          <!-- Tags: multi-select from API + custom -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tags</label>
+            <select id="tags-select" class="form-select" multiple size="4"></select>
+            <div class="form-text">Ctrl/Cmd para seleccionar varios. Agrega nuevos abajo.</div>
+            <input type="text" id="tags-custom" class="form-control mt-2" placeholder="Tags adicionales (separados por coma)"/>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" id="isAvailable" class="form-check-input" checked/>
+            <label class="form-check-label" for="isAvailable">Disponible</label>
+          </div>
+          <button type="submit" class="btn btn-dark w-100">Crear Item</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let restTimer;
+
+    // Load tags
+    async function loadTags() {
+      try {
+        const res  = await fetch('/api/reports/distinct-values');
+        const data = await res.json();
+        const sel  = document.getElementById('tags-select');
+        (data.values?.tags || []).forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          sel.appendChild(opt);
+        });
+      } catch (_) {}
+    }
+
+    // Restaurant autocomplete
+    document.getElementById('restaurant-search').addEventListener('input', function() {
+      clearTimeout(restTimer);
+      const q = this.value.trim();
+      document.getElementById('restaurantId').value = '';
+      document.getElementById('restaurant-selected').classList.add('d-none');
+      if (q.length < 1) {
+        document.getElementById('restaurant-suggestions').classList.add('d-none');
+        return;
+      }
+      restTimer = setTimeout(() => searchRestaurants(q), 250);
+    });
+
+    async function searchRestaurants(q) {
+      try {
+        const res  = await fetch(`/api/restaurants?q=${encodeURIComponent(q)}&limit=8`);
+        const data = await res.json();
+        const box  = document.getElementById('restaurant-suggestions');
+        if (!data.restaurants?.length) {
+          box.innerHTML = '<div class="suggestion-item text-muted">Sin resultados</div>';
+        } else {
+          box.innerHTML = data.restaurants.map(r =>
+            `<div class="suggestion-item" onclick="selectRestaurant('${r._id}','${r.name.replace(/'/g,"\\'")}')">
+               <strong>${r.name}</strong> <span class="text-muted small">${r.address}</span>
+             </div>`
+          ).join('');
+        }
+        box.classList.remove('d-none');
+      } catch (_) {}
+    }
+
+    function selectRestaurant(id, name) {
+      document.getElementById('restaurantId').value = id;
+      document.getElementById('restaurant-search').value = name;
+      const sel = document.getElementById('restaurant-selected');
+      sel.textContent = 'Restaurante seleccionado';
+      sel.classList.remove('d-none');
+      document.getElementById('restaurant-suggestions').classList.add('d-none');
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#restaurant-search') && !e.target.closest('#restaurant-suggestions'))
+        document.getElementById('restaurant-suggestions').classList.add('d-none');
+    });
+
+    // Pre-fill from URL param
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('restaurantId')) {
+      const rid = urlParams.get('restaurantId');
+      document.getElementById('restaurantId').value = rid;
+      fetch(`/api/restaurants/${rid}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.restaurant) {
+            document.getElementById('restaurant-search').value = d.restaurant.name;
+            const sel = document.getElementById('restaurant-selected');
+            sel.textContent = 'Restaurante seleccionado';
+            sel.classList.remove('d-none');
+          }
+        }).catch(() => {});
+    }
+
+    document.getElementById('form-create').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const alertEl = document.getElementById('alert');
+      const restaurantId = document.getElementById('restaurantId').value.trim();
+      if (!restaurantId) {
+        alertEl.className = 'alert alert-warning';
+        alertEl.textContent = 'Selecciona un restaurante de la lista';
+        alertEl.classList.remove('d-none');
+        return;
+      }
+      const selectedTags = Array.from(document.getElementById('tags-select').selectedOptions).map(o => o.value);
+      const customTags   = document.getElementById('tags-custom').value.split(',').map(t => t.trim()).filter(Boolean);
+      const body = {
+        restaurantId,
+        name:        document.getElementById('name').value.trim(),
+        price:       parseFloat(document.getElementById('price').value),
+        tags:        [...new Set([...selectedTags, ...customTags])],
+        isAvailable: document.getElementById('isAvailable').checked
+      };
+      const res  = await fetch('/api/menu-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alertEl.className = 'alert alert-success';
+        alertEl.textContent = `Item creado: ${data.menuItem.name}`;
+        alertEl.classList.remove('d-none');
+        setTimeout(() => window.location.href = `/menu?restaurantId=${body.restaurantId}`, 1500);
+      } else {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = data.error?.message || data.error || 'Error al crear';
+        alertEl.classList.remove('d-none');
+      }
+    });
+
+    loadTags();
+  </script>
+</body>
+</html>

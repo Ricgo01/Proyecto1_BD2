@@ -429,6 +429,110 @@ git log --oneline
 
 ---
 
+## Ejemplos de Request / Response
+
+### POST `/api/users`
+**Body:**
+```json
+{
+  "name": "Ana García",
+  "email": "ana@example.com",
+  "role": "customer"
+}
+```
+**Respuesta 201:**
+```json
+{ "message": "Usuario creado exitosamente", "user": { "_id": "...", "name": "Ana García", "email": "ana@example.com", "role": "customer", "createdAt": "..." } }
+```
+
+### POST `/api/restaurants`
+**Body:**
+```json
+{
+  "name": "Tacos El Gordo",
+  "address": "Av. Reforma 123, CDMX",
+  "owner_id": "<_id de un User con role owner>",
+  "location": { "type": "Point", "coordinates": [-99.1332, 19.4326] },
+  "categories": ["Tacos", "Mexicana"]
+}
+```
+**Respuesta 201:**
+```json
+{ "message": "Restaurante creado exitosamente", "restaurant": { "_id": "...", "name": "Tacos El Gordo", ... } }
+```
+
+### POST `/api/menu-items`
+**Body:**
+```json
+{
+  "restaurantId": "<_id del restaurante>",
+  "name": "Taco de Carnitas",
+  "price": 35.50,
+  "tags": ["carne", "popular"],
+  "isAvailable": true
+}
+```
+
+### POST `/api/orders`
+**Body:**
+```json
+{
+  "userId": "<_id del usuario>",
+  "restaurantId": "<_id del restaurante>",
+  "items": [
+    { "menuItemId": "<_id del menu item>", "qty": 2 },
+    { "menuItemId": "<_id de otro item>", "qty": 1 }
+  ]
+}
+```
+**Respuesta 201:**
+```json
+{
+  "message": "Pedido creado exitosamente",
+  "order": {
+    "_id": "...",
+    "status": "created",
+    "totalAmount": 106.50,
+    "items": [
+      { "menuItemId": "...", "nameSnapshot": "Taco de Carnitas", "unitPriceSnapshot": 35.50, "qty": 2, "lineTotal": 71.00 }
+    ]
+  }
+}
+```
+
+### PATCH `/api/orders/:id/status`
+**Body:**
+```json
+{ "status": "confirmed" }
+```
+**Valores válidos:** `created` → `confirmed` → `preparing` → `delivered` → `cancelled`
+
+### Respuesta de error estándar
+```json
+{
+  "error": {
+    "message": "descripción del error",
+    "code": "VALIDATION_ERROR | INVALID_ID | DUPLICATE_KEY | INTERNAL_ERROR",
+    "details": "información adicional (opcional)"
+  }
+}
+```
+
+---
+
+## Definition of Done
+
+Un endpoint está **listo** cuando cumple **todo** lo siguiente:
+
+- [ ] Responde el formato estándar: `{ data }` en éxito, `{ error: { message, code } }` en falla
+- [ ] Valida los campos requeridos del body/query y retorna `400` si faltan
+- [ ] Retorna `404` cuando el recurso no existe
+- [ ] No hace `res.status(500)` directo — usa `next(error)` para que el errorHandler lo capture
+- [ ] Tiene al menos un ejemplo de request documentado en este README
+- [ ] No rompe el servidor al recibir un ID inválido (CastError manejado globalmente)
+
+---
+
 
 ## Autores
 

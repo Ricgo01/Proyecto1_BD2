@@ -7,7 +7,7 @@ const MenuItem = require('../models/MenuItem');
 /**
  * CREATE - Crear nuevo item del menú
  */
-exports.createMenuItem = async (req, res) => {
+exports.createMenuItem = async (req, res, next) => {
   try {
     const { restaurantId, name, price, tags, isAvailable } = req.body;
     
@@ -33,10 +33,7 @@ exports.createMenuItem = async (req, res) => {
       menuItem 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al crear item del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -44,7 +41,7 @@ exports.createMenuItem = async (req, res) => {
  * READ - Obtener items del menú
  * Soporta: filtros por restaurante, disponibilidad, tags
  */
-exports.getAllMenuItems = async (req, res) => {
+exports.getAllMenuItems = async (req, res, next) => {
   try {
     const { 
       restaurantId,
@@ -60,7 +57,9 @@ exports.getAllMenuItems = async (req, res) => {
     const filter = {};
     if (restaurantId) filter.restaurantId = restaurantId;
     if (isAvailable !== undefined) filter.isAvailable = isAvailable === 'true';
-    if (tag) filter.tags = tag;
+    if (tag) filter.tags = { $regex: tag, $options: 'i' };
+    const { q } = req.query;
+    if (q) filter.name = { $regex: q, $options: 'i' };
 
     // Ordenamiento
     const sort = { [sortBy]: order === 'desc' ? -1 : 1 };
@@ -87,17 +86,14 @@ exports.getAllMenuItems = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener items del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Obtener item por ID
  */
-exports.getMenuItemById = async (req, res) => {
+exports.getMenuItemById = async (req, res, next) => {
   try {
     const menuItem = await MenuItem.findById(req.params.id)
       .populate('restaurantId', 'name address');
@@ -108,17 +104,14 @@ exports.getMenuItemById = async (req, res) => {
     
     res.json({ menuItem });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener item del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Actualizar item del menú
  */
-exports.updateMenuItem = async (req, res) => {
+exports.updateMenuItem = async (req, res, next) => {
   try {
     const updates = req.body;
     
@@ -137,17 +130,14 @@ exports.updateMenuItem = async (req, res) => {
       menuItem 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al actualizar item del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * DELETE - Eliminar item del menú
  */
-exports.deleteMenuItem = async (req, res) => {
+exports.deleteMenuItem = async (req, res, next) => {
   try {
     const menuItem = await MenuItem.findByIdAndDelete(req.params.id);
     
@@ -160,10 +150,7 @@ exports.deleteMenuItem = async (req, res) => {
       menuItem 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar item del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -171,7 +158,7 @@ exports.deleteMenuItem = async (req, res) => {
  * UPDATE - Actualizar disponibilidad masiva
  * Ejemplo: marcar múltiples items como no disponibles
  */
-exports.bulkUpdateAvailability = async (req, res) => {
+exports.bulkUpdateAvailability = async (req, res, next) => {
   try {
     const { itemIds, isAvailable } = req.body;
     
@@ -191,9 +178,6 @@ exports.bulkUpdateAvailability = async (req, res) => {
       modifiedCount: result.modifiedCount
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al actualizar disponibilidad', 
-      details: error.message 
-    });
+    next(error);
   }
 };

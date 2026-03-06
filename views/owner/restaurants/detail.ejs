@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Restaurante</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+  <div class="container py-4">
+    <a href="/restaurants" class="btn btn-sm btn-outline-secondary mb-3">← Volver</a>
+
+    <!-- Info restaurante -->
+    <div class="card shadow-sm mb-4" id="card-restaurant">
+      <div class="card-body text-center text-muted py-5">Cargando...</div>
+    </div>
+
+    <!-- Menú del restaurante -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h4>Menu</h4>
+      <a href="/menu/create" class="btn btn-sm btn-dark" id="btn-add-item">+ Item</a>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-secondary">
+            <tr><th>Nombre</th><th>Precio</th><th>Tags</th><th>Disponible</th><th></th></tr>
+          </thead>
+          <tbody id="menu-tbody">
+            <tr><td colspan="5" class="text-center py-3 text-muted">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const restaurantId = window.location.pathname.split('/').pop();
+
+    async function loadRestaurant() {
+      const res  = await fetch(`/api/restaurants/${restaurantId}`);
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('card-restaurant').innerHTML =
+          `<div class="card-body text-danger">Error: ${data.error?.message || 'No encontrado'}</div>`;
+        return;
+      }
+      const r = data.restaurant;
+      document.getElementById('card-restaurant').innerHTML = `
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-8">
+              <h3 class="mb-1">${r.name}</h3>
+              <p class="text-muted mb-2">${r.address}</p>
+              <div class="mb-2">${(r.categories||[]).map(c=>`<span class="badge bg-secondary me-1">${c}</span>`).join('')}</div>
+            </div>
+            <div class="col-md-4 text-md-end">
+              <div class="fs-3 fw-bold text-warning">${r.avgRating?.toFixed(1) ?? '—'}</div>
+              <div class="text-muted small">${r.ratingCount ?? 0} reseñas</div>
+            </div>
+          </div>
+        </div>`;
+      document.getElementById('btn-add-item').href = `/menu/create?restaurantId=${restaurantId}`;
+    }
+
+    async function loadMenu() {
+      const res  = await fetch(`/api/menu-items?restaurantId=${restaurantId}&limit=50`);
+      const data = await res.json();
+      const tbody = document.getElementById('menu-tbody');
+      if (!data.menuItems?.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin items</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.menuItems.map(m => `
+        <tr>
+          <td>${m.name}</td>
+          <td>Q${m.price?.toFixed(2)}</td>
+          <td>${(m.tags||[]).map(t=>`<span class="badge bg-info text-dark me-1">${t}</span>`).join('') || '—'}</td>
+          <td>
+            <span class="badge ${m.isAvailable ? 'bg-success' : 'bg-danger'}">
+              ${m.isAvailable ? 'Disponible' : 'No disponible'}
+            </span>
+          </td>
+          <td>
+            <a href="/menu/${m._id}/edit" class="btn btn-sm btn-outline-secondary">Editar</a>
+          </td>
+        </tr>`).join('');
+    }
+
+    loadRestaurant();
+    loadMenu();
+  </script>
+</body>
+</html>

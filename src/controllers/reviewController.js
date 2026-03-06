@@ -9,7 +9,7 @@ const Order = require('../models/Order');
  * CREATE - Crear nueva reseña
  * Validación: el pedido debe estar en estado 'delivered'
  */
-exports.createReview = async (req, res) => {
+exports.createReview = async (req, res, next) => {
   try {
     const { restaurantId, userId, orderId, rating, comment } = req.body;
     
@@ -60,10 +60,7 @@ exports.createReview = async (req, res) => {
       review 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al crear reseña', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -71,7 +68,7 @@ exports.createReview = async (req, res) => {
  * READ - Obtener reseñas
  * Soporta: filtros por restaurante, usuario, rating
  */
-exports.getAllReviews = async (req, res) => {
+exports.getAllReviews = async (req, res, next) => {
   try {
     const { 
       restaurantId,
@@ -121,17 +118,14 @@ exports.getAllReviews = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener reseñas', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Obtener reseña por ID
  */
-exports.getReviewById = async (req, res) => {
+exports.getReviewById = async (req, res, next) => {
   try {
     const review = await Review.findById(req.params.id)
       .populate('userId', 'name email')
@@ -144,17 +138,14 @@ exports.getReviewById = async (req, res) => {
     
     res.json({ review });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener reseña', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Actualizar reseña
  */
-exports.updateReview = async (req, res) => {
+exports.updateReview = async (req, res, next) => {
   try {
     const { rating, comment } = req.body;
     
@@ -184,17 +175,14 @@ exports.updateReview = async (req, res) => {
       review 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al actualizar reseña', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * DELETE - Eliminar reseña
  */
-exports.deleteReview = async (req, res) => {
+exports.deleteReview = async (req, res, next) => {
   try {
     const review = await Review.findByIdAndDelete(req.params.id);
     
@@ -207,10 +195,7 @@ exports.deleteReview = async (req, res) => {
       review 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar reseña', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -218,7 +203,7 @@ exports.deleteReview = async (req, res) => {
  * DELETE - Eliminar múltiples reseñas (mantenimiento)
  * Ejemplo: eliminar reseñas que infringen normas
  */
-exports.deleteReviewsByIds = async (req, res) => {
+exports.deleteReviewsByIds = async (req, res, next) => {
   try {
     const { reviewIds } = req.body;
     
@@ -237,9 +222,6 @@ exports.deleteReviewsByIds = async (req, res) => {
       deletedCount: result.deletedCount
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar reseñas', 
-      details: error.message 
-    });
+    next(error);
   }
 };
