@@ -318,3 +318,47 @@ exports.removeCategory = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * UPDATE masivo - Agregar o remover categorías en múltiples restaurantes (Admin)
+ * Body: { restaurantIds: [...], addCategories: [...], removeCategories: [...] }
+ */
+exports.bulkUpdateCategories = async (req, res, next) => {
+  try {
+    const { restaurantIds, addCategories, removeCategories } = req.body;
+
+    if (!Array.isArray(restaurantIds) || !restaurantIds.length) {
+      return res.status(400).json({ error: 'restaurantIds debe ser un array no vacío' });
+    }
+    if (!addCategories?.length && !removeCategories?.length) {
+      return res.status(400).json({ error: 'Debes proporcionar addCategories o removeCategories' });
+    }
+
+    const filter = { _id: { $in: restaurantIds } };
+    let modifiedCount = 0;
+
+    // $addToSet y $pull no se pueden combinar en un solo updateMany sobre el mismo campo
+    if (addCategories?.length) {
+      const r = await Restaurant.updateMany(
+        filter,
+        { $addToSet: { categories: { $each: addCategories } } }
+      );
+      modifiedCount = Math.max(modifiedCount, r.modifiedCount);
+    }
+    if (removeCategories?.length) {
+      const r = await Restaurant.updateMany(
+        filter,
+        { $pull: { categories: { $in: removeCategories } } }
+      );
+      modifiedCount = Math.max(modifiedCount, r.modifiedCount);
+    }
+
+    res.json({
+      message: 'Categorías actualizadas exitosamente',
+      modifiedCount,
+      restaurantsAffected: restaurantIds.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};

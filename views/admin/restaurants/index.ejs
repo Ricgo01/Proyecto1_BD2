@@ -18,7 +18,13 @@
         <h2 class="mb-0">Todos los Restaurantes</h2>
         <small class="text-muted">Vista Admin — sin filtro de propietario</small>
       </div>
-      <a href="/restaurants/create" class="btn btn-dark">+ Nuevo Restaurante</a>
+      <div class="d-flex gap-2">
+        <button id="bulk-cat-btn" class="btn btn-outline-warning d-none"
+          data-bs-toggle="modal" data-bs-target="#cat-modal">
+          Ajustar Categorías (<span id="sel-count">0</span>)
+        </button>
+        <a href="/restaurants/create" class="btn btn-dark">+ Nuevo Restaurante</a>
+      </div>
     </div>
 
     <!-- Filtros -->
@@ -56,6 +62,7 @@
         <table class="table table-hover mb-0">
           <thead class="table-dark">
             <tr>
+              <th style="width:36px"><input type="checkbox" id="check-all" class="form-check-input" title="Seleccionar todos" onchange="toggleAll(this.checked)"/></th>
               <th>Nombre</th>
               <th>Categorías</th>
               <th>Rating</th>
@@ -78,6 +85,8 @@
     let searchTimer;
     // Map restaurantId → orderCount from aggregation
     let orderCountMap = {};
+    // Selected restaurant IDs for bulk category ops
+    const selectedIds = new Set();
 
     async function loadCategories() {
       try {
@@ -126,14 +135,17 @@
       }
 
       tbody.innerHTML = data.restaurants.map(r => {
-        const orders = orderCountMap[r._id] ?? '—';
+        const orders  = orderCountMap[r._id] ?? '—';
+        const checked = selectedIds.has(r._id) ? 'checked' : '';
         return `
-        <tr class="align-middle">
+        <tr class="align-middle" id="row-${r._id}">
+          <td><input type="checkbox" class="form-check-input row-check" value="${r._id}" ${checked}
+            onchange="toggleRow('${r._id}',this.checked)"/></td>
           <td>
             ${r.image ? `<img src="/api/images/${r.image}" alt="logo" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" class="me-2">` : ''}
             <strong>${r.name}</strong>
           </td>
-          <td>${(r.categories || []).slice(0,3).join(', ') || '—'}</td>
+          <td class="small">${(r.categories || []).slice(0,4).map(c=>`<span class="badge bg-secondary me-1">${c}</span>`).join('') || '—'}</td>
           <td><span class="badge bg-warning text-dark">${r.avgRating?.toFixed(1) ?? '—'}</span></td>
           <td><span class="badge bg-success">${orders}</span></td>
           <td class="text-muted small">${r.address}</td>
@@ -170,6 +182,143 @@
 
     loadCategories();
     loadOrderCounts().then(() => loadRestaurants(1));
+  </script>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- Modal: Ajuste Masivo de Categorías (Admin)             -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="modal fade" id="cat-modal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Ajustar Categorías (<code>updateMany + $addToSet / $pull</code>)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Se aplicará a <strong id="modal-sel-count">0</strong> restaurante(s) seleccionado(s).
+          </p>
+          <!-- Categorías a agregar -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Agregar categorías <span class="text-success">($addToSet)</span></label>
+            <div class="input-group">
+              <input type="text" id="cat-add-input" class="form-control" placeholder="Ej: Italiana"/>
+              <button class="btn btn-outline-success" onclick="addCatTag('add')">+ Añadir</button>
+            </div>
+            <div id="cat-add-tags" class="mt-2 d-flex flex-wrap gap-1"></div>
+          </div>
+          <!-- Categorías a eliminar -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Eliminar categorías <span class="text-danger">($pull)</span></label>
+            <div class="input-group">
+              <input type="text" id="cat-rm-input" class="form-control" placeholder="Ej: Comida Rápida"/>
+              <button class="btn btn-outline-danger" onclick="addCatTag('rm')">+ Añadir</button>
+            </div>
+            <div id="cat-rm-tags" class="mt-2 d-flex flex-wrap gap-1"></div>
+          </div>
+          <div id="cat-modal-alert" class="d-none"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-warning text-dark" onclick="applyBulkCategories()">Aplicar a seleccionados</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Selection helpers ──────────────────────────────────
+    function toggleRow(id, checked) {
+      if (checked) selectedIds.add(id); else selectedIds.delete(id);
+      updateSelectionUI();
+    }
+    function toggleAll(checked) {
+      document.querySelectorAll('.row-check').forEach(cb => {
+        cb.checked = checked;
+        if (checked) selectedIds.add(cb.value); else selectedIds.delete(cb.value);
+      });
+      updateSelectionUI();
+    }
+    function updateSelectionUI() {
+      const n = selectedIds.size;
+      document.getElementById('sel-count').textContent = n;
+      document.getElementById('modal-sel-count').textContent = n;
+      document.getElementById('bulk-cat-btn').classList.toggle('d-none', n === 0);
+      document.getElementById('check-all').indeterminate =
+        n > 0 && n < document.querySelectorAll('.row-check').length;
+    }
+
+    // ── Category tag chips ────────────────────────────────
+    const _catLists = { add: [], rm: [] };
+    function addCatTag(type) {
+      const inp = document.getElementById(type === 'add' ? 'cat-add-input' : 'cat-rm-input');
+      const val = inp.value.trim();
+      if (!val || _catLists[type].includes(val)) { inp.value=''; return; }
+      _catLists[type].push(val);
+      inp.value = '';
+      renderCatTags(type);
+    }
+    document.getElementById('cat-add-input').addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();addCatTag('add');} });
+    document.getElementById('cat-rm-input').addEventListener('keydown',  e => { if(e.key==='Enter'){e.preventDefault();addCatTag('rm');} });
+
+    function renderCatTags(type) {
+      const container = document.getElementById(type === 'add' ? 'cat-add-tags' : 'cat-rm-tags');
+      const color     = type === 'add' ? 'success' : 'danger';
+      container.innerHTML = _catLists[type].map((c, i) =>
+        `<span class="badge bg-${color} d-flex align-items-center gap-1">${c}
+           <button class="btn-close btn-close-white p-0" style="font-size:.6rem"
+             onclick="_catLists['${type}'].splice(${i},1);renderCatTags('${type}')"></button>
+         </span>`).join('');
+    }
+
+    // ── Apply bulk category update ────────────────────────
+    async function applyBulkCategories() {
+      const alertEl = document.getElementById('cat-modal-alert');
+      if (!selectedIds.size) return;
+      if (!_catLists.add.length && !_catLists.rm.length) {
+        alertEl.className = 'alert alert-warning';
+        alertEl.textContent = 'Agrega al menos una categoría para aplicar.';
+        alertEl.classList.remove('d-none');
+        return;
+      }
+      try {
+        const res  = await fetch('/api/restaurants/bulk/categories', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            restaurantIds:    [...selectedIds],
+            addCategories:    _catLists.add,
+            removeCategories: _catLists.rm
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alertEl.className = 'alert alert-success';
+          alertEl.textContent = `✓ ${data.modifiedCount} restaurante(s) actualizados.`;
+          alertEl.classList.remove('d-none');
+          // Reset tags
+          _catLists.add = []; _catLists.rm = [];
+          renderCatTags('add'); renderCatTags('rm');
+          // Reload list after short delay
+          setTimeout(() => {
+            bootstrap.Modal.getInstance(document.getElementById('cat-modal')).hide();
+            selectedIds.clear(); updateSelectionUI();
+            loadOrderCounts().then(() => loadRestaurants(1));
+          }, 1200);
+        } else {
+          alertEl.className = 'alert alert-danger';
+          alertEl.textContent = data.error || 'Error al actualizar';
+          alertEl.classList.remove('d-none');
+        }
+      } catch (_) {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = 'Error de red';
+        alertEl.classList.remove('d-none');
+      }
+    }
+    document.getElementById('cat-modal').addEventListener('hidden.bs.modal', () => {
+      document.getElementById('cat-modal-alert').classList.add('d-none');
+    });
   </script>
 </body>
 </html>

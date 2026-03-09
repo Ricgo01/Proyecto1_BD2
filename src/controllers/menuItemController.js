@@ -57,12 +57,19 @@ exports.getAllMenuItems = async (req, res, next) => {
 
     // Construir filtro
     const filter = {};
+    const Restaurant = require('../models/Restaurant');
 
-    if (restaurantId) {
+    if (restaurantId && owner_id) {
+      // Verify the restaurant belongs to this owner (security check)
+      const rest = await Restaurant.findById(restaurantId).lean();
+      if (!rest || rest.owner_id.toString() !== owner_id.toString()) {
+        return res.status(403).json({ error: 'No autorizado: el restaurante no te pertenece' });
+      }
+      filter.restaurantId = restaurantId;
+    } else if (restaurantId) {
       filter.restaurantId = restaurantId;
     } else if (owner_id) {
       // Filtrar sólo los items que pertenecen a restaurantes de este owner
-      const Restaurant = require('../models/Restaurant');
       const ownerRests = await Restaurant.find({ owner_id }, '_id').lean();
       filter.restaurantId = { $in: ownerRests.map(r => r._id) };
     }
@@ -161,6 +168,63 @@ exports.deleteMenuItem = async (req, res, next) => {
       menuItem 
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * CREATE masiva - Insertar múltiples items desde JSON (insertMany)
+ */
+exports.bulkCreateMenuItems = async (req, res, next) => {
+  try {
+    const { restaurantId, items, owner_id } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: 'restaurantId requerido' });
+    }
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({ error: 'items debe ser un array no vacío' });
+    }
+
+    // Verify ownership when owner_id is provided
+    if (owner_id) {
+      const Restaurant = require('../models/Restaurant');
+      const rest = await Restaurant.findById(restaurantId).lean();
+      if (!rest) return res.status(404).json({ error: 'Restaurante no encontrado' });
+      if (rest.owner_id.toString() !== owner_id.toString()) {
+        return res.status(403).json({ error: 'No autorizado: el restaurante no te pertenece' });
+      }
+    }
+
+    const toInsert = items
+      .filter(i => i.name && i.price != null)
+      .map(i => ({
+        restaurantId,
+        name:        String(i.name).trim(),
+        price:       parseFloat(i.price),
+        tags:        Array.isArray(i.tags) ? i.tags : [],
+        isAvailable: i.isAvailable !== false,
+        photo:       i.photo || null
+      }));
+
+    if (!toInsert.length) {
+      return res.status(400).json({ error: 'Ningún item válido (se requiere name y price en cada objeto)' });
+    }
+
+    const inserted = await MenuItem.insertMany(toInsert, { ordered: false });
+
+    res.status(201).json({
+      message: `${inserted.length} item(s) importados exitosamente`,
+      insertedCount: inserted.length
+    });
+  } catch (error) {
+    if (error.name === 'BulkWriteError') {
+      return res.status(207).json({
+        message: 'Importación parcial',
+        insertedCount: error.result?.nInserted ?? 0,
+        errors: error.writeErrors?.length ?? 0
+      });
+    }
     next(error);
   }
 };

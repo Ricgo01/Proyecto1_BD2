@@ -14,8 +14,11 @@
   <%- include('../../partials/navbar') %>
   <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2>Menu</h2>
-      <a href="/menu/create" class="btn btn-dark">+ Nuevo Item</a>
+      <h2>Mi Menú <small class="text-muted fs-6">Solo tus restaurantes</small></h2>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulk-modal">&#8679; Carga Masiva JSON</button>
+        <a href="/menu/create" class="btn btn-dark">+ Nuevo Item</a>
+      </div>
     </div>
 
     <!-- Filtros -->
@@ -94,13 +97,15 @@
       try {
         const res = await fetch(`/api/restaurants?owner_id=${user.id}&limit=100`);
         const data = await res.json();
-        const sel = document.getElementById('filter-restaurantId');
+        const sel     = document.getElementById('filter-restaurantId');
+        const bulkSel = document.getElementById('bulk-restaurantId');
         if (data.restaurants) {
           data.restaurants.forEach(r => {
             const opt = document.createElement('option');
             opt.value = r._id;
             opt.textContent = r.name;
             sel.appendChild(opt);
+            if (bulkSel) bulkSel.appendChild(opt.cloneNode(true));
           });
         }
         
@@ -134,12 +139,9 @@
       const user         = JSON.parse(localStorage.getItem('user'));
 
       const params = new URLSearchParams({ page, limit: 20 });
-      if (restaurantId) {
-        params.set('restaurantId', restaurantId);
-      } else {
-        // No restaurant selected → restrict to this owner's restaurants only
-        params.set('owner_id', user.id);
-      }
+      // Always pass owner_id — backend verifies ownership (even for specific restaurantId)
+      params.set('owner_id', user.id);
+      if (restaurantId) params.set('restaurantId', restaurantId);
       if (nameQ)        params.set('q', nameQ);
       if (isAvailable !== '') params.set('isAvailable', isAvailable);
       if (tag)          params.set('tag', tag);
@@ -204,6 +206,173 @@
 
     loadTags();
     loadOwnerRestaurants();
+  </script>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- Modal: Carga Masiva de Menú desde JSON              -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="modal fade" id="bulk-modal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">&#8679; Carga Masiva de Menú (JSON — <code>insertMany</code>)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Step 1: input -->
+          <div id="bulk-step1">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Restaurante destino <span class="text-danger">*</span></label>
+              <select id="bulk-restaurantId" class="form-select">
+                <option value="">-- Selecciona un restaurante --</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Subir archivo <code>.json</code></label>
+              <input type="file" id="bulk-file" class="form-control" accept=".json"
+                onchange="document.getElementById('bulk-json').value=''"/>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">O pega el JSON directamente</label>
+              <textarea id="bulk-json" rows="7" class="form-control font-monospace"
+                placeholder='[{"name":"Platillo 1","price":25.00,"tags":["pollo","caliente"],"isAvailable":true},{"name":"Platillo 2","price":30.00,"tags":["carne"],"isAvailable":true}]'
+                oninput="document.getElementById('bulk-file').value=''"></textarea>
+            </div>
+            <div class="alert alert-info small mb-0">
+              <strong>Formato esperado:</strong>
+              <code>[{"name":"Nombre","price":10.0,"tags":["tag1","tag2"],"isAvailable":true}, ...]</code><br>
+              Campos obligatorios: <strong>name</strong>, <strong>price</strong>. Opcionales: tags, isAvailable (default true).
+            </div>
+          </div>
+          <!-- Step 2: preview -->
+          <div id="bulk-step2" class="d-none">
+            <div id="bulk-preview"></div>
+          </div>
+          <!-- Step 3: result -->
+          <div id="bulk-step3" class="d-none">
+            <div id="bulk-result"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="resetBulkModal()" data-bs-dismiss="modal">Cancelar</button>
+          <button id="bulk-back-btn"    class="btn btn-outline-secondary d-none" onclick="backBulkStep()">← Volver</button>
+          <button id="bulk-preview-btn" class="btn btn-outline-primary"         onclick="previewBulk()">Vista Previa →</button>
+          <button id="bulk-import-btn"  class="btn btn-success d-none"          onclick="importBulk()">Importar todo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let _bulkItems = [];
+
+    async function _readBulkJSON() {
+      const file = document.getElementById('bulk-file').files[0];
+      const txt  = document.getElementById('bulk-json').value.trim();
+      if (file) {
+        return new Promise((ok, fail) => {
+          const r = new FileReader();
+          r.onload = e => { try { ok(JSON.parse(e.target.result)); } catch { fail('Archivo JSON inválido'); } };
+          r.readAsText(file);
+        });
+      }
+      if (txt) { try { return JSON.parse(txt); } catch { throw 'JSON inválido'; } }
+      throw 'Sube un archivo o pega el JSON';
+    }
+
+    async function previewBulk() {
+      const rid = document.getElementById('bulk-restaurantId').value;
+      if (!rid) return alert('Selecciona un restaurante primero.');
+      try {
+        const raw = await _readBulkJSON();
+        if (!Array.isArray(raw) || !raw.length) return alert('El JSON debe ser un array no vacío.');
+        _bulkItems = raw;
+        _renderBulkPreview();
+        document.getElementById('bulk-step1').classList.add('d-none');
+        document.getElementById('bulk-step2').classList.remove('d-none');
+        document.getElementById('bulk-preview-btn').classList.add('d-none');
+        document.getElementById('bulk-back-btn').classList.remove('d-none');
+        document.getElementById('bulk-import-btn').classList.remove('d-none');
+      } catch (e) { alert(e); }
+    }
+
+    function _renderBulkPreview() {
+      const valid   = _bulkItems.filter(i => i.name && i.price != null);
+      const invalid = _bulkItems.length - valid.length;
+      document.getElementById('bulk-preview').innerHTML = `
+        <div class="alert alert-${invalid ? 'warning' : 'success'} mb-2">
+          <strong>${valid.length}</strong> item(s) válidos${invalid ? ` · <strong>${invalid}</strong> con errores (sin <em>name</em> o <em>price</em>) — serán ignorados` : ' — todo OK ✓'}
+        </div>
+        <div style="max-height:380px;overflow-y:auto">
+        <table class="table table-sm table-bordered mb-0">
+          <thead class="table-secondary sticky-top"><tr><th>#</th><th>Nombre</th><th>Precio</th><th>Tags</th><th>Disponible</th><th></th></tr></thead>
+          <tbody>
+            ${_bulkItems.map((it,i) => `
+              <tr class="${!it.name||it.price==null?'table-danger':''}">
+                <td class="text-muted">${i+1}</td>
+                <td>${it.name||'<em class="text-danger">falta</em>'}</td>
+                <td>${it.price!=null?'Q'+parseFloat(it.price).toFixed(2):'<em class="text-danger">falta</em>'}</td>
+                <td>${(it.tags||[]).map(t=>'<span class="badge bg-info text-dark me-1">'+t+'</span>').join('')||'—'}</td>
+                <td>${it.isAvailable!==false?'✓':'✗'}</td>
+                <td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="_bulkItems.splice(${i},1);_renderBulkPreview()">✕</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function importBulk() {
+      const user = JSON.parse(localStorage.getItem('user'));
+      const rid  = document.getElementById('bulk-restaurantId').value;
+      const valid = _bulkItems.filter(i => i.name && i.price != null);
+      if (!valid.length) return alert('No hay items válidos.');
+
+      const btn = document.getElementById('bulk-import-btn');
+      btn.disabled = true; btn.textContent = 'Importando...';
+
+      try {
+        const res  = await fetch('/api/menu-items/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ restaurantId: rid, items: valid, owner_id: user.id })
+        });
+        const data = await res.json();
+        document.getElementById('bulk-step2').classList.add('d-none');
+        document.getElementById('bulk-step3').classList.remove('d-none');
+        document.getElementById('bulk-import-btn').classList.add('d-none');
+        document.getElementById('bulk-result').innerHTML = res.ok
+          ? `<div class="alert alert-success fs-5">✓ Se importaron <strong>${data.insertedCount}</strong> platillo(s) correctamente.</div>`
+          : `<div class="alert alert-danger">Error: ${data.error || 'desconocido'}</div>`;
+        if (res.ok) setTimeout(() => {
+          bootstrap.Modal.getInstance(document.getElementById('bulk-modal')).hide();
+          resetBulkModal();
+          loadMenu(1);
+        }, 1800);
+      } catch (_) {
+        document.getElementById('bulk-result').innerHTML = '<div class="alert alert-danger">Error de red al importar.</div>';
+      }
+      btn.disabled = false; btn.textContent = 'Importar todo';
+    }
+
+    function backBulkStep() {
+      document.getElementById('bulk-step2').classList.add('d-none');
+      document.getElementById('bulk-step1').classList.remove('d-none');
+      document.getElementById('bulk-preview-btn').classList.remove('d-none');
+      document.getElementById('bulk-back-btn').classList.add('d-none');
+      document.getElementById('bulk-import-btn').classList.add('d-none');
+    }
+
+    function resetBulkModal() {
+      _bulkItems = [];
+      document.getElementById('bulk-step1').classList.remove('d-none');
+      document.getElementById('bulk-step2').classList.add('d-none');
+      document.getElementById('bulk-step3').classList.add('d-none');
+      document.getElementById('bulk-preview-btn').classList.remove('d-none');
+      document.getElementById('bulk-back-btn').classList.add('d-none');
+      document.getElementById('bulk-import-btn').classList.add('d-none');
+      document.getElementById('bulk-file').value = '';
+      document.getElementById('bulk-json').value = '';
+    }
+    document.getElementById('bulk-modal').addEventListener('hidden.bs.modal', resetBulkModal);
   </script>
 </body>
 </html>

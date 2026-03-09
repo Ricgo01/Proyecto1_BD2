@@ -8,6 +8,7 @@ const menuItemController = require('../controllers/menuItemController');
 
 // CREATE
 router.post('/', menuItemController.createMenuItem);
+router.post('/bulk', menuItemController.bulkCreateMenuItems);  // Carga masiva JSON
 
 // READ
 router.get('/', menuItemController.getAllMenuItems);

@@ -4,9 +4,9 @@ services:
     build:
       context: .
     ports:
-      - "3000:3000"
+      - "3000:3001"
     environment:
-      - PORT=3000
+      - PORT=3001
       - MONGO_URI=${MONGO_URI} # Toma el valor de tu archivo .env para conectarse a Atlas
     volumes:
       # Monta tu código local en el contenedor (útil para ver cambios en tiempo real con nodemon sin reconstruir)
