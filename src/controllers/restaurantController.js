@@ -60,6 +60,7 @@ exports.getAllRestaurants = async (req, res, next) => {
       category,
       minRating,
       q,
+      owner_id,
       page = 1, 
       limit = 20, 
       sortBy = 'avgRating', 
@@ -69,6 +70,7 @@ exports.getAllRestaurants = async (req, res, next) => {
 
     // Construir filtro
     const filter = {};
+    if (owner_id) filter.owner_id = owner_id;
     if (category) filter.categories = { $regex: category, $options: 'i' };
     if (minRating) filter.avgRating = { $gte: parseFloat(minRating) };
     if (q) filter.name = { $regex: q, $options: 'i' };
@@ -129,17 +131,22 @@ exports.getRestaurantById = async (req, res, next) => {
  */
 exports.updateRestaurant = async (req, res, next) => {
   try {
+    const requestingUserId = req.headers['x-user-id'];
+    const existing = await Restaurant.findById(req.params.id);
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Restaurante no encontrado' });
+    }
+    if (requestingUserId && existing.owner_id.toString() !== requestingUserId) {
+      return res.status(403).json({ error: 'No autorizado: no eres el dueño de este restaurante' });
+    }
+
     const updates = req.body;
-    
     const restaurant = await Restaurant.findByIdAndUpdate(
       req.params.id,
       updates,
       { new: true, runValidators: true }
     );
-    
-    if (!restaurant) {
-      return res.status(404).json({ error: 'Restaurante no encontrado' });
-    }
     
     res.json({ 
       message: 'Restaurante actualizado exitosamente', 
@@ -155,15 +162,20 @@ exports.updateRestaurant = async (req, res, next) => {
  */
 exports.deleteRestaurant = async (req, res, next) => {
   try {
-    const restaurant = await Restaurant.findByIdAndDelete(req.params.id);
-    
-    if (!restaurant) {
+    const requestingUserId = req.headers['x-user-id'];
+    const existing = await Restaurant.findById(req.params.id);
+
+    if (!existing) {
       return res.status(404).json({ error: 'Restaurante no encontrado' });
     }
-    
+    if (requestingUserId && existing.owner_id.toString() !== requestingUserId) {
+      return res.status(403).json({ error: 'No autorizado: no eres el dueño de este restaurante' });
+    }
+
+    await existing.deleteOne();
     res.json({ 
       message: 'Restaurante eliminado exitosamente', 
-      restaurant 
+      restaurant: existing 
     });
   } catch (error) {
     next(error);
@@ -243,9 +255,18 @@ exports.getNearbyRestaurants = async (req, res, next) => {
 exports.addCategory = async (req, res, next) => {
   try {
     const { category } = req.body;
-    
+    const requestingUserId = req.headers['x-user-id'];
+
     if (!category) {
       return res.status(400).json({ error: 'Campo "category" requerido' });
+    }
+
+    const existing = await Restaurant.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Restaurante no encontrado' });
+    }
+    if (requestingUserId && existing.owner_id.toString() !== requestingUserId) {
+      return res.status(403).json({ error: 'No autorizado: no eres el dueño de este restaurante' });
     }
 
     const restaurant = await Restaurant.findByIdAndUpdate(
@@ -253,10 +274,6 @@ exports.addCategory = async (req, res, next) => {
       { $addToSet: { categories: category } },
       { new: true }
     );
-    
-    if (!restaurant) {
-      return res.status(404).json({ error: 'Restaurante no encontrado' });
-    }
     
     res.json({ 
       message: 'Categoría agregada exitosamente', 
@@ -273,9 +290,18 @@ exports.addCategory = async (req, res, next) => {
 exports.removeCategory = async (req, res, next) => {
   try {
     const { category } = req.body;
-    
+    const requestingUserId = req.headers['x-user-id'];
+
     if (!category) {
       return res.status(400).json({ error: 'Campo "category" requerido' });
+    }
+
+    const existing = await Restaurant.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Restaurante no encontrado' });
+    }
+    if (requestingUserId && existing.owner_id.toString() !== requestingUserId) {
+      return res.status(403).json({ error: 'No autorizado: no eres el dueño de este restaurante' });
     }
 
     const restaurant = await Restaurant.findByIdAndUpdate(
@@ -283,10 +309,6 @@ exports.removeCategory = async (req, res, next) => {
       { $pull: { categories: category } },
       { new: true }
     );
-    
-    if (!restaurant) {
-      return res.status(404).json({ error: 'Restaurante no encontrado' });
-    }
     
     res.json({ 
       message: 'Categoría removida exitosamente', 

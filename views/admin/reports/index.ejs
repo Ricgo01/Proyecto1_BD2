@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admin — Reportes y Agregaciones</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <script>
+    const _u = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!_u.id) window.location.href = '/login';
+    if (_u.role !== 'admin') window.location.href = '/';
+  </script>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+  <div class="container py-4">
+    <h2 class="mb-4">Reportes y Agregaciones <span class="badge bg-danger ms-2">Admin</span></h2>
+
+    <div class="row g-4">
+      <!-- Stats generales -->
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header fw-bold">Estadísticas Generales <code>countDocuments</code></div>
+          <div class="card-body" id="stats-content">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- Top platillos -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header fw-bold">Top Platillos Más Vendidos <code>$unwind → $group → $sort</code></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-secondary">
+                <tr><th>#</th><th>Platillo</th><th>Vendidos</th><th>Ingresos</th></tr>
+              </thead>
+              <tbody id="top-dishes-tbody">
+                <tr><td colspan="4" class="text-center text-muted py-3">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top restaurantes por órdenes -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header fw-bold">Top Restaurantes por Órdenes <code>$group → $sort → $lookup</code></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-secondary">
+                <tr><th>#</th><th>Restaurante</th><th>Órdenes</th><th>Ingresos</th></tr>
+              </thead>
+              <tbody id="top-restaurants-tbody">
+                <tr><td colspan="4" class="text-center text-muted py-3">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top clientes -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header fw-bold">Top Clientes por Gasto <code>$group → $sort → $lookup</code></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-secondary">
+                <tr><th>#</th><th>Cliente</th><th>Pedidos</th><th>Total Gastado</th></tr>
+              </thead>
+              <tbody id="top-customers-tbody">
+                <tr><td colspan="4" class="text-center text-muted py-3">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ventas mensuales -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+            <span>Ventas Mensuales <code>$group por mes</code></span>
+            <select id="monthly-restaurant" class="form-select form-select-sm w-auto" onchange="loadMonthlySales()">
+              <option value="">Todos los restaurantes</option>
+            </select>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-secondary">
+                <tr><th>Año</th><th>Mes</th><th>Órdenes</th><th>Ingresos</th></tr>
+              </thead>
+              <tbody id="monthly-tbody">
+                <tr><td colspan="4" class="text-center text-muted py-3">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ventas por categoría -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header fw-bold">Ventas por Categoría <code>$lookup → $unwind → $group</code></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-secondary">
+                <tr><th>Categoría</th><th>Restaurantes</th><th>Ingresos</th></tr>
+              </thead>
+              <tbody id="sales-category-tbody">
+                <tr><td colspan="3" class="text-center text-muted py-3">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Análisis por estado -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header fw-bold">Pedidos por Estado <code>$group → $sort</code></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-secondary"><tr><th>Estado</th><th>Total</th></tr></thead>
+              <tbody id="order-status-tbody">
+                <tr><td colspan="2" class="text-center text-muted py-3">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Valores distinct -->
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header fw-bold">Valores Únicos <code>distinct</code></div>
+          <div class="card-body" id="distinct-content">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- Operaciones masivas -->
+      <div class="col-12">
+        <div class="card shadow-sm border-danger">
+          <div class="card-header fw-bold text-danger">Operaciones Masivas (Rúbrica)</div>
+          <div class="card-body">
+            <div class="row g-2 align-items-end">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold small">Selecciona un restaurante</label>
+                <select id="bulk-restaurantId" class="form-select">
+                  <option value="">-- Elige un restaurante --</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <button class="btn btn-danger w-100" onclick="bulkDeleteOrders()">Depurar Órdenes Canceladas (DeleteMany)</button>
+              </div>
+              <div class="col-md-4">
+                <button class="btn btn-warning text-dark w-100" onclick="bulkCloseMenu()">Cerrar Todo el Menú (UpdateMany)</button>
+              </div>
+            </div>
+            <div id="bulk-alert" class="mt-2 d-none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+    async function loadAll() {
+      const [statsRes, dishRes, custRes, distRes, statusRes, topRestRes, catRes] = await Promise.all([
+        fetch('/api/reports/stats'),
+        fetch('/api/reports/top-dishes?limit=10'),
+        fetch('/api/reports/top-customers?limit=10'),
+        fetch('/api/reports/distinct-values'),
+        fetch('/api/reports/order-status-analysis'),
+        fetch('/api/reports/top-restaurants?limit=10'),
+        fetch('/api/reports/sales-by-category')
+      ]);
+
+      // Stats
+      const statsData = await statsRes.json();
+      if (statsRes.ok) {
+        const s = statsData.stats;
+        document.getElementById('stats-content').innerHTML = `
+          <div class="row text-center g-2">
+            ${[['Restaurantes',s.totalRestaurants,'primary'],['Pedidos',s.totalOrders,'success'],
+               ['Reseñas',s.totalReviews,'warning'],['Items Menú',s.totalMenuItems,'info'],['Usuarios',s.totalUsers,'secondary']]
+              .map(([label,val,color])=>`
+              <div class="col"><div class="p-3 bg-${color} bg-opacity-10 rounded">
+                <div class="fw-bold fs-4">${val?.toLocaleString()??'—'}</div>
+                <div class="small text-muted">${label}</div>
+              </div></div>`).join('')}
+          </div>`;
+      }
+
+      // Top platillos
+      const dishData  = await dishRes.json();
+      const dishTbody = document.getElementById('top-dishes-tbody');
+      if (dishRes.ok && dishData.dishes?.length) {
+        dishTbody.innerHTML = dishData.dishes.map((d,i) => `
+          <tr>
+            <td><span class="badge bg-secondary">${i+1}</span></td>
+            <td>${d.dishName || d._id || '—'}</td>
+            <td><strong>${d.totalSold ?? d.count ?? '—'}</strong></td>
+            <td>Q${(d.totalRevenue ?? 0).toFixed(2)}</td>
+          </tr>`).join('');
+      } else {
+        dishTbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center">Sin datos</td></tr>';
+      }
+
+      // Top restaurantes
+      const topRestData  = await topRestRes.json();
+      const topRestTbody = document.getElementById('top-restaurants-tbody');
+      if (topRestRes.ok && topRestData.restaurants?.length) {
+        topRestTbody.innerHTML = topRestData.restaurants.map((r,i) => `
+          <tr>
+            <td><span class="badge bg-secondary">${i+1}</span></td>
+            <td>${r.restaurantName || r.name || r._id || '—'}</td>
+            <td><strong>${r.totalOrders ?? r.orderCount ?? r.count ?? '—'}</strong></td>
+            <td>Q${(r.totalRevenue ?? r.revenue ?? 0).toFixed(2)}</td>
+          </tr>`).join('');
+      } else {
+        topRestTbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center">Sin datos</td></tr>';
+      }
+
+      // Top clientes
+      const custData  = await custRes.json();
+      const custTbody = document.getElementById('top-customers-tbody');
+      if (custRes.ok && custData.customers?.length) {
+        custTbody.innerHTML = custData.customers.map((c,i) => `
+          <tr>
+            <td><span class="badge bg-secondary">${i+1}</span></td>
+            <td>${c.userName || c.email || c._id || '—'}</td>
+            <td>${c.totalOrders ?? '—'}</td>
+            <td>Q${(c.totalSpent ?? 0).toFixed(2)}</td>
+          </tr>`).join('');
+      } else {
+        custTbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center">Sin datos</td></tr>';
+      }
+
+      // Distinct
+      const distData = await distRes.json();
+      if (distRes.ok) {
+        const v = distData.values;
+        document.getElementById('distinct-content').innerHTML = `
+          <p class="mb-1"><strong>Categorías (${v.categories?.length??0}):</strong>
+            ${(v.categories||[]).map(c=>`<span class="badge bg-secondary me-1">${c}</span>`).join('')}
+          </p>
+          <p class="mb-0"><strong>Tags (${v.tags?.length??0}):</strong>
+            ${(v.tags||[]).map(t=>`<span class="badge bg-info text-dark me-1">${t}</span>`).join('')}
+          </p>`;
+      }
+
+      // Estado pedidos
+      const statusData  = await statusRes.json();
+      const statusTbody = document.getElementById('order-status-tbody');
+      if (statusRes.ok) {
+        const list = statusData.analysis || [];
+        statusTbody.innerHTML = list.length
+          ? list.map(s => `<tr><td>${s._id || s.status}</td><td><strong>${s.count ?? s.total ?? '—'}</strong></td></tr>`).join('')
+          : '<tr><td colspan="2" class="text-muted text-center">Sin datos</td></tr>';
+      }
+
+      // Ventas por categoría
+      const catData  = await catRes.json();
+      const catTbody = document.getElementById('sales-category-tbody');
+      if (catRes.ok && catData.sales?.length) {
+        catTbody.innerHTML = catData.sales.map(c => `
+          <tr>
+            <td>${c._id || c.category || '—'}</td>
+            <td>${c.restaurantCount ?? c.count ?? '—'}</td>
+            <td>Q${(c.totalRevenue ?? c.revenue ?? 0).toFixed(2)}</td>
+          </tr>`).join('');
+      } else {
+        catTbody.innerHTML = '<tr><td colspan="3" class="text-muted text-center">Sin datos</td></tr>';
+      }
+    }
+
+    async function loadMonthlySales() {
+      const rid = document.getElementById('monthly-restaurant').value;
+      const url = '/api/reports/monthly-sales' + (rid ? `?restaurantId=${rid}` : '');
+      const tbody = document.getElementById('monthly-tbody');
+      try {
+        const res  = await fetch(url);
+        const data = await res.json();
+        const list = data.sales || [];
+        tbody.innerHTML = list.length
+          ? list.map(s => `
+              <tr>
+                <td>${s._id?.year ?? s.year ?? '—'}</td>
+                <td>${MONTHS[(s._id?.month ?? s.month ?? 1) - 1] ?? '—'}</td>
+                <td>${s.totalOrders ?? s.count ?? '—'}</td>
+                <td>Q${(s.totalRevenue ?? s.revenue ?? 0).toFixed(2)}</td>
+              </tr>`).join('')
+          : '<tr><td colspan="4" class="text-center text-muted">Sin datos</td></tr>';
+      } catch (_) {}
+    }
+
+    async function loadAllRestaurantsForBulk() {
+      try {
+        const res  = await fetch('/api/restaurants?limit=500');
+        const data = await res.json();
+        const sel1 = document.getElementById('bulk-restaurantId');
+        const sel2 = document.getElementById('monthly-restaurant');
+        (data.restaurants || []).forEach(r => {
+          sel1.innerHTML += `<option value="${r._id}">${r.name}</option>`;
+          sel2.innerHTML += `<option value="${r._id}">${r.name}</option>`;
+        });
+      } catch (_) {}
+    }
+
+    async function bulkDeleteOrders() {
+      const rid = document.getElementById('bulk-restaurantId').value;
+      if (!rid) return alert('Selecciona un restaurante primero.');
+      if (!confirm('¿Depurar (DeleteMany) todas las órdenes CANCELADAS de este restaurante?')) return;
+      try {
+        const res  = await fetch(`/api/orders/bulk/cancelled?restaurantId=${rid}`, { method: 'DELETE' });
+        const data = await res.json();
+        showBulkAlert(res.ok ? `success:¡Éxito! Se eliminaron ${data.deletedCount} órdenes canceladas.` : `danger:${data.error || 'Error'}`);
+      } catch (_) { showBulkAlert('danger:Error de red'); }
+    }
+
+    async function bulkCloseMenu() {
+      const rid = document.getElementById('bulk-restaurantId').value;
+      if (!rid) return alert('Selecciona un restaurante primero.');
+      if (!confirm('¿Inactivar (UpdateMany) TODO el menú de este restaurante?')) return;
+      try {
+        const res  = await fetch('/api/menu-items/bulk/availability', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isAvailable: false, restaurantId: rid })
+        });
+        const data = await res.json();
+        showBulkAlert(res.ok ? `success:¡Éxito! Se inactivaron ${data.modifiedCount} platillos.` : `danger:${data.error || 'Error'}`);
+      } catch (_) { showBulkAlert('danger:Error de red'); }
+    }
+
+    function showBulkAlert(msg) {
+      const [type, text] = msg.split(':');
+      const el = document.getElementById('bulk-alert');
+      el.className = `alert alert-${type} mt-2`;
+      el.textContent = text;
+      el.classList.remove('d-none');
+      setTimeout(() => el.classList.add('d-none'), 4000);
+    }
+
+    loadAll();
+    loadAllRestaurantsForBulk().then(() => loadMonthlySales());
+  </script>
+</body>
+</html>

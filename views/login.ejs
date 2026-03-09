@@ -8,13 +8,14 @@
   <style>
     body {
       background-color: #f8f9fa;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 2rem 0;
     }
-    .login-container {
-      max-width: 400px;
+    .auth-container {
+      max-width: 420px;
       width: 100%;
       padding: 2rem;
       background: white;
@@ -25,53 +26,115 @@
 </head>
 <body>
 
-  <div class="login-container">
-    <h2 class="text-center mb-4">Iniciar Sesión</h2>
-    
+  <div class="auth-container">
+
+    <!-- TAB HEADERS -->
+    <ul class="nav nav-tabs mb-4" id="authTabs">
+      <li class="nav-item">
+        <button class="nav-link active" id="tab-login" onclick="showTab('login')">Iniciar Sesión</button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="tab-register" onclick="showTab('register')">Crear Cuenta</button>
+      </li>
+    </ul>
+
     <div id="alertPlaceholder"></div>
 
-    <form id="loginForm">
-      <div class="mb-3">
-        <label for="email" class="form-label">Correo Electrónico (Como está en la base de datos)</label>
-        <input type="text" class="form-control" id="email" required placeholder="tu@email.com_123">
-      </div>
-      <button type="submit" class="btn btn-primary w-100">Ingresar</button>
-    </form>
-    
-    <div class="text-center mt-3">
-      <small>Usuarios de prueba:</small><br>
-      <small class="text-muted">Dueño: dueño_email_del_seed</small><br>
-      <small class="text-muted">Cliente: cliente_email_del_seed</small>
+    <!-- LOGIN PANEL -->
+    <div id="panel-login">
+      <form id="loginForm">
+        <div class="mb-3">
+          <label for="email" class="form-label">Correo Electrónico</label>
+          <input type="text" class="form-control" id="email" required placeholder="tu@email.com">
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Ingresar</button>
+      </form>
     </div>
+
+    <!-- REGISTER PANEL -->
+    <div id="panel-register" class="d-none">
+      <form id="registerForm">
+        <div class="mb-3">
+          <label for="reg-name" class="form-label">Nombre completo *</label>
+          <input type="text" class="form-control" id="reg-name" required placeholder="Juan Pérez">
+        </div>
+        <div class="mb-3">
+          <label for="reg-email" class="form-label">Correo Electrónico *</label>
+          <input type="email" class="form-control" id="reg-email" required placeholder="tu@email.com">
+        </div>
+        <div class="alert alert-info py-2 small">
+          Las nuevas cuentas se crean con rol <strong>Customer</strong>.
+        </div>
+        <button type="submit" class="btn btn-success w-100">Registrarse</button>
+      </form>
+    </div>
+
   </div>
 
   <script>
+    function showTab(tab) {
+      document.getElementById('panel-login').classList.toggle('d-none',    tab !== 'login');
+      document.getElementById('panel-register').classList.toggle('d-none', tab !== 'register');
+      document.getElementById('tab-login').classList.toggle('active',    tab === 'login');
+      document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+      document.getElementById('alertPlaceholder').innerHTML = '';
+    }
+
+    // ── Login ──────────────────────────────────────────────────────────────
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const email = document.getElementById('email').value;
+      const email = document.getElementById('email').value.trim();
       const alertPlaceholder = document.getElementById('alertPlaceholder');
-      
+
       try {
-        // En tu rúbrica tienes el índice por email: { email: 1 } (unique)
-        // Usamos el endpoint que ya tienes programado!
-        const response = await fetch(`/api/users/email/${email}`);
+        const response = await fetch(`/api/users/email/${encodeURIComponent(email)}`);
         const data = await response.json();
 
         if (response.ok && data.user) {
-          // Simulamos una sesión guardando los datos en localStorage
           localStorage.setItem('user', JSON.stringify({
-            id: data.user._id,
-            name: data.user.name,
+            id:    data.user._id,
+            name:  data.user.name,
             email: data.user.email,
-            role: data.user.role // Puede ser admin, owner o customer
+            role:  data.user.role
           }));
-
-          // Redireccionar al dashboard general (desde allí el EJS puede cambiar según el rol)
-          window.location.href = '/'; 
+          window.location.href = '/';
         } else {
-          alertPlaceholder.innerHTML = `<div class="alert alert-danger">Usuario no encontrado</div>`;
+          alertPlaceholder.innerHTML = `<div class="alert alert-danger">Usuario no encontrado. ¿Deseas <a href="#" onclick="showTab('register')">crear una cuenta</a>?</div>`;
         }
       } catch (error) {
+        alertPlaceholder.innerHTML = `<div class="alert alert-danger">Error de conexión</div>`;
+      }
+    });
+
+    // ── Register ───────────────────────────────────────────────────────────
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const alertPlaceholder = document.getElementById('alertPlaceholder');
+      const name  = document.getElementById('reg-name').value.trim();
+      const email = document.getElementById('reg-email').value.trim();
+
+      try {
+        const res  = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, role: 'customer' })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          // Auto-login after registration
+          localStorage.setItem('user', JSON.stringify({
+            id:    data.user._id,
+            name:  data.user.name,
+            email: data.user.email,
+            role:  data.user.role
+          }));
+          window.location.href = '/';
+        } else {
+          const msg = data.error?.message || data.error || 'Error al registrarse';
+          alertPlaceholder.innerHTML = `<div class="alert alert-danger">${msg.includes('duplicate') || msg.includes('E11000') ? 'Este correo ya está registrado.' : msg}</div>`;
+        }
+      } catch (err) {
         alertPlaceholder.innerHTML = `<div class="alert alert-danger">Error de conexión</div>`;
       }
     });

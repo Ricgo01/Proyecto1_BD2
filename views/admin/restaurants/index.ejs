@@ -2,15 +2,23 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Restaurantes</title>
+  <title>Admin — Todos los Restaurantes</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <script>
+    const _u = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!_u.id) window.location.href = '/login';
+    if (_u.role !== 'admin') window.location.href = '/';
+  </script>
 </head>
 <body class="bg-light">
   <%- include('../../partials/navbar') %>
   <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2>Restaurantes</h2>
-      <a href="/restaurants/create" class="btn btn-dark">+ Nuevo</a>
+      <div>
+        <h2 class="mb-0">Todos los Restaurantes</h2>
+        <small class="text-muted">Vista Admin — sin filtro de propietario</small>
+      </div>
+      <a href="/restaurants/create" class="btn btn-dark">+ Nuevo Restaurante</a>
     </div>
 
     <!-- Filtros -->
@@ -22,7 +30,7 @@
           </div>
           <div class="col-md-3">
             <select id="filter-category" class="form-select">
-              <option value="">Todas las categorias</option>
+              <option value="">Todas las categorías</option>
             </select>
           </div>
           <div class="col-md-2">
@@ -32,7 +40,7 @@
             <select id="filter-sort" class="form-select">
               <option value="avgRating">Rating (mayor primero)</option>
               <option value="name">Nombre (A-Z)</option>
-              <option value="createdAt">Mas nuevos</option>
+              <option value="createdAt">Más nuevos</option>
             </select>
           </div>
           <div class="col-md-1">
@@ -47,50 +55,62 @@
       <div class="card-body p-0">
         <table class="table table-hover mb-0">
           <thead class="table-dark">
-            <tr><th>Nombre</th><th>Categorias</th><th>Rating</th><th>Direccion</th><th></th></tr>
+            <tr>
+              <th>Nombre</th>
+              <th>Categorías</th>
+              <th>Rating</th>
+              <th>Órdenes</th>
+              <th>Dirección</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody id="restaurants-tbody">
-            <tr><td colspan="5" class="text-center py-4 text-muted">Cargando...</td></tr>
+            <tr><td colspan="6" class="text-center py-4 text-muted">Cargando...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
-
-    <!-- Paginacion -->
     <nav class="mt-3" id="pagination-container"></nav>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    let currentPage = 1;
     let searchTimer;
+    // Map restaurantId → orderCount from aggregation
+    let orderCountMap = {};
 
-    // Load categories into dropdown
     async function loadCategories() {
       try {
         const res  = await fetch('/api/reports/distinct-values');
         const data = await res.json();
         const sel  = document.getElementById('filter-category');
-        if (data.values?.categories?.length) {
-          data.values.categories.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c;
-            opt.textContent = c;
-            sel.appendChild(opt);
-          });
-        }
+        (data.values?.categories || []).forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c; opt.textContent = c;
+          sel.appendChild(opt);
+        });
+      } catch (_) {}
+    }
+
+    async function loadOrderCounts() {
+      try {
+        // Fetch top-restaurants (by order count) to get per-restaurant totals
+        const res  = await fetch('/api/reports/top-restaurants?limit=500');
+        const data = await res.json();
+        (data.restaurants || []).forEach(r => {
+          orderCountMap[r._id || r.restaurantId] = r.totalOrders ?? r.orderCount ?? r.count ?? 0;
+        });
       } catch (_) {}
     }
 
     async function loadRestaurants(page = 1) {
-      currentPage = page;
       const q        = document.getElementById('search-q').value.trim();
       const category = document.getElementById('filter-category').value;
       const rating   = document.getElementById('filter-rating').value.trim();
       const sort     = document.getElementById('filter-sort').value;
-      const user     = JSON.parse(localStorage.getItem('user'));
 
-      const params = new URLSearchParams({ page, limit: 10, sortBy: sort, owner_id: user.id });
+      // Admin: NO owner_id filter → sees all
+      const params = new URLSearchParams({ page, limit: 15, sortBy: sort });
       if (q)        params.set('q', q);
       if (category) params.set('category', category);
       if (rating)   params.set('minRating', rating);
@@ -100,25 +120,29 @@
       const tbody = document.getElementById('restaurants-tbody');
 
       if (!data.restaurants?.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin resultados</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Sin resultados</td></tr>';
         renderPagination(0, 1);
         return;
       }
 
-      tbody.innerHTML = data.restaurants.map(r => `
+      tbody.innerHTML = data.restaurants.map(r => {
+        const orders = orderCountMap[r._id] ?? '—';
+        return `
         <tr class="align-middle">
           <td>
             ${r.image ? `<img src="/api/images/${r.image}" alt="logo" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" class="me-2">` : ''}
             <strong>${r.name}</strong>
           </td>
-          <td>${(r.categories || []).join(', ') || '—'}</td>
+          <td>${(r.categories || []).slice(0,3).join(', ') || '—'}</td>
           <td><span class="badge bg-warning text-dark">${r.avgRating?.toFixed(1) ?? '—'}</span></td>
+          <td><span class="badge bg-success">${orders}</span></td>
           <td class="text-muted small">${r.address}</td>
           <td class="text-end" style="white-space:nowrap">
             <a href="/restaurants/${r._id}" class="btn btn-sm btn-outline-dark me-1">Ver</a>
             <a href="/restaurants/${r._id}/edit" class="btn btn-sm btn-outline-warning">Editar</a>
           </td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
 
       renderPagination(data.pagination.pages, page);
     }
@@ -134,7 +158,6 @@
       nav.innerHTML = html + '</ul>';
     }
 
-    // Auto-search after typing 1+ characters
     document.getElementById('search-q').addEventListener('input', function() {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => loadRestaurants(1), 300);
@@ -146,7 +169,7 @@
     });
 
     loadCategories();
-    loadRestaurants(1);
+    loadOrderCounts().then(() => loadRestaurants(1));
   </script>
 </body>
 </html>

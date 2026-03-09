@@ -96,6 +96,7 @@
       // Collect categories: selected from list + custom typed ones
       const selectedOpts   = Array.from(document.getElementById('categories-select').selectedOptions).map(o => o.value);
       const customCats     = document.getElementById('categories-custom').value.split(',').map(c => c.trim()).filter(Boolean);
+      const allCategories  = [...selectedOpts, ...customCats];
       let uploadedImageId = null;
       const imageInput = document.getElementById('image');
       if (imageInput.files.length > 0) {

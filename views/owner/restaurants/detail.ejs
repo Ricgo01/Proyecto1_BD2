@@ -36,7 +36,14 @@
     <div class="row">
       <!-- Pedidos del restaurante -->
       <div class="col-md-6 mb-4">
-        <h4 class="mb-3">Últimas Órdenes</h4>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">Últimas Órdenes</h4>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary" id="orders-prev" onclick="slidePrev('orders')" disabled>&#8249;</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" id="orders-next" onclick="slideNext('orders')" disabled>&#8250;</button>
+            <span class="ms-2 small text-muted" id="orders-page-label"></span>
+          </div>
+        </div>
         <div class="card shadow-sm">
           <div class="card-body p-0">
             <ul class="list-group list-group-flush" id="orders-list">
@@ -48,7 +55,14 @@
 
       <!-- Reseñas del restaurante -->
       <div class="col-md-6 mb-4">
-        <h4 class="mb-3">Reseñas de Clientes</h4>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">Reseñas de Clientes</h4>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary" id="reviews-prev" onclick="slidePrev('reviews')" disabled>&#8249;</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" id="reviews-next" onclick="slideNext('reviews')" disabled>&#8250;</button>
+            <span class="ms-2 small text-muted" id="reviews-page-label"></span>
+          </div>
+        </div>
         <div class="card shadow-sm">
           <div class="card-body p-0">
             <ul class="list-group list-group-flush" id="reviews-list">
@@ -89,6 +103,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const restaurantId = window.location.pathname.split('/').pop();
+    const currentUser  = JSON.parse(localStorage.getItem('user')) || {};
 
     async function loadRestaurant() {
       const res  = await fetch(`/api/restaurants/${restaurantId}`);
@@ -99,6 +114,23 @@
         return;
       }
       const r = data.restaurant;
+      // Ownership check: owner_id is populated as { _id, name, email }
+      const ownerId = r.owner_id?._id ?? r.owner_id;
+      const isOwner = currentUser.id && ownerId && ownerId.toString() === currentUser.id.toString();
+
+      if (!isOwner) {
+        document.getElementById('card-restaurant').innerHTML =
+          `<div class="card-body">
+            <div class="alert alert-warning mb-3">
+              <strong>Acceso restringido:</strong> Solo puedes gestionar tus propios restaurantes.
+            </div>
+            <h3>${r.name}</h3><p class="text-muted">${r.address}</p>
+            <div>${(r.categories||[]).map(c=>`<span class="badge bg-secondary me-1">${c}</span>`).join('')}</div>
+          </div>`;
+        document.getElementById('btn-add-item').classList.add('d-none');
+        return;
+      }
+
       document.getElementById('card-restaurant').innerHTML = `
         <div class="card-body">
           <div class="row align-items-center">
@@ -115,6 +147,9 @@
               <div class="d-flex align-items-center mb-2">
                 <input type="text" id="newCategory" class="form-control form-control-sm w-auto me-2" placeholder="Nueva Categoría ($addToSet)">
                 <button class="btn btn-sm btn-outline-primary" onclick="addCategory('${r._id}')">Añadir</button>
+              </div>
+              <div class="mt-2">
+                <a href="/restaurants/${r._id}/edit" class="btn btn-sm btn-warning">✏️ Editar Restaurante</a>
               </div>
 
             </div>
@@ -159,7 +194,7 @@
       if(!cat) return alert('Escribe una categoría a añadir');
       
       const res = await fetch(`/api/restaurants/${restId}/categories`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id || '' },
         body: JSON.stringify({ category: cat })
       });
       if(res.ok) window.location.reload();
@@ -168,7 +203,6 @@
 
     async function loadReviews() {
       try {
-        // Obtener la mayor cantidad posible (o podrías implementar paginación aquí luego)
         const res = await fetch(`/api/reviews?restaurantId=${restaurantId}&limit=100`);
         const data = await res.json();
         const list = document.getElementById('reviews-list');
@@ -176,7 +210,7 @@
           list.innerHTML = '<li class="list-group-item text-center text-muted py-3">Este restaurante aún no tiene reseñas.</li>';
           return;
         }
-        list.innerHTML = data.reviews.map(r => `
+        sliders.reviews.items = data.reviews.map(r => `
           <li class="list-group-item">
             <div class="d-flex justify-content-between">
               <strong>${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</strong>
@@ -184,7 +218,9 @@
             </div>
             <p class="mb-0 mt-1 small">${r.comment || '<i>Sin comentario</i>'}</p>
           </li>
-        `).join('');
+        `);
+        sliders.reviews.page = 0;
+        renderSlider('reviews');
       } catch (err) {}
     }
 
@@ -208,7 +244,6 @@
 
     async function loadOrders() {
       try {
-        // Obtener sin límite corto (o con límite alto) para ver "todo"
         const res = await fetch(`/api/orders?restaurantId=${restaurantId}&limit=100`);
         const data = await res.json();
         const list = document.getElementById('orders-list');
@@ -216,8 +251,7 @@
           list.innerHTML = '<li class="list-group-item text-center text-muted py-3">No hay pedidos registrados todavía.</li>';
           return;
         }
-        
-        list.innerHTML = data.orders.map(o => {
+        sliders.orders.items = data.orders.map(o => {
           const s = o.status;
           return `
           <li class="list-group-item">
@@ -238,7 +272,10 @@
               <span>${new Date(o.createdAt).toLocaleDateString()}</span>
             </div>
           </li>
-        `}).join('');
+        `;
+        });
+        sliders.orders.page = 0;
+        renderSlider('orders');
       } catch (err) {}
     }
 
@@ -279,11 +316,40 @@
       if(container3) container3.innerHTML = iframeHTML3;
     }
 
+    // ── Mini Sliders ─────────────────────────────────────────────────────────
+    const sliders = {
+      orders:  { items: [], page: 0, perPage: 3 },
+      reviews: { items: [], page: 0, perPage: 3 }
+    };
+
     loadRestaurant();
     loadMenu();
     loadReviews();
     loadOrders();
     loadChart();
+
+    function renderSlider(key) {
+      const s     = sliders[key];
+      const list  = document.getElementById(`${key}-list`);
+      const prev  = document.getElementById(`${key}-prev`);
+      const next  = document.getElementById(`${key}-next`);
+      const label = document.getElementById(`${key}-page-label`);
+      if (!s.items.length) return;
+      const start = s.page * s.perPage;
+      list.innerHTML = s.items.slice(start, start + s.perPage).join('');
+      prev.disabled  = s.page === 0;
+      next.disabled  = start + s.perPage >= s.items.length;
+      const total    = Math.ceil(s.items.length / s.perPage);
+      label.textContent = total > 1 ? `${s.page + 1}/${total}` : '';
+    }
+
+    window.slidePrev = function(key) {
+      if (sliders[key].page > 0) { sliders[key].page--; renderSlider(key); }
+    };
+    window.slideNext = function(key) {
+      const s = sliders[key];
+      if ((s.page + 1) * s.perPage < s.items.length) { s.page++; renderSlider(key); }
+    };
   </script>
 </body>
 </html>

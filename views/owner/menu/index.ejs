@@ -131,9 +131,15 @@
       const nameQ        = document.getElementById('filter-name').value.trim();
       const isAvailable  = document.getElementById('filter-available').value;
       const tag          = document.getElementById('filter-tag').value;
+      const user         = JSON.parse(localStorage.getItem('user'));
 
       const params = new URLSearchParams({ page, limit: 20 });
-      if (restaurantId) params.set('restaurantId', restaurantId);
+      if (restaurantId) {
+        params.set('restaurantId', restaurantId);
+      } else {
+        // No restaurant selected → restrict to this owner's restaurants only
+        params.set('owner_id', user.id);
+      }
       if (nameQ)        params.set('q', nameQ);
       if (isAvailable !== '') params.set('isAvailable', isAvailable);
       if (tag)          params.set('tag', tag);

@@ -64,6 +64,23 @@
     </div>
 
     <div class="row g-4" id="role-cards-container">
+      <!-- Admin section -->
+      <div class="col-12" id="adminCard" style="display: none;">
+        <div class="card shadow-sm h-100 border-danger">
+          <div class="card-header bg-danger text-white fw-bold">Admin — Control Total</div>
+          <div class="card-body">
+            <div class="row g-2">
+              <div class="col-md-3"><a href="/admin/restaurants" class="btn btn-outline-danger w-100 text-start">Todos los Restaurantes</a></div>
+              <div class="col-md-3"><a href="/admin/reports" class="btn btn-outline-danger w-100 text-start">Reportes y Agregaciones</a></div>
+              <div class="col-md-3"><a href="/menu" class="btn btn-outline-secondary w-100 text-start">Menú (todos)</a></div>
+              <div class="col-md-3"><a href="/orders/create" class="btn btn-outline-primary w-100 text-start">Crear Pedido</a></div>
+              <div class="col-md-3"><a href="/restaurants/nearby" class="btn btn-outline-info w-100 text-start">📍 Restaurantes Cercanos</a></div>
+              <div class="col-md-3"><a href="/restaurants/create" class="btn btn-outline-secondary w-100 text-start">Crear Restaurante</a></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Owner section -->
       <div class="col-md-6" id="ownerCard" style="display: none;">
         <div class="card shadow-sm h-100">
@@ -73,7 +90,6 @@
             <a href="/restaurants/create" class="btn btn-outline-dark text-start">Crear Restaurante</a>
             <a href="/menu" class="btn btn-outline-dark text-start">Menu — listar, editar, toggle</a>
             <a href="/menu/create" class="btn btn-outline-dark text-start">Crear Item de Menu</a>
-            <a href="/reports" class="btn btn-outline-dark text-start">Reportes y Agregaciones</a>
             
             <hr class="my-2">
             <div class="text-muted small fw-bold mb-1">Operaciones Masivas (Rúbrica)</div>
@@ -124,7 +140,11 @@
         `;
         roleContainer.prepend(ctaDiv);
       } 
-      else if (storedUser.role === 'owner' || storedUser.role === 'admin') {
+      else if (storedUser.role === 'admin') {
+        document.getElementById('adminCard').style.display = 'block';
+        document.getElementById('customerCard').style.display = 'block';
+      }
+      else if (storedUser.role === 'owner') {
         document.getElementById('ownerCard').style.display = 'block';
         document.getElementById('customerCard').style.display = 'block';
       }

@@ -6,7 +6,22 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav me-auto">
-        <li class="nav-item dropdown" id="dropdown-owner">
+        <!-- Admin dropdown (solo visible para rol admin) -->
+        <li class="nav-item dropdown" id="dropdown-admin" style="display:none">
+          <a class="nav-link dropdown-toggle text-warning fw-bold" href="#" data-bs-toggle="dropdown">Admin</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="/admin/restaurants">Todos los Restaurantes</a></li>
+            <li><a class="dropdown-item" href="/admin/reports">Reportes y Agregaciones</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/restaurants">Mis Restaurantes</a></li>
+            <li><a class="dropdown-item" href="/restaurants/create">+ Nuevo Restaurante</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/menu">Menu</a></li>
+            <li><a class="dropdown-item" href="/menu/create">+ Nuevo Item</a></li>
+          </ul>
+        </li>
+        <!-- Owner dropdown (sin Reportes — solo para rol owner) -->
+        <li class="nav-item dropdown" id="dropdown-owner" style="display:none">
           <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Owner</a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="/restaurants">Mis Restaurantes</a></li>
@@ -14,8 +29,6 @@
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="/menu">Menu</a></li>
             <li><a class="dropdown-item" href="/menu/create">+ Nuevo Item</a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="/reports">Reportes</a></li>
           </ul>
         </li>
         <li class="nav-item dropdown">
@@ -26,6 +39,8 @@
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="/reviews">Mis Resenas</a></li>
             <li><a class="dropdown-item" href="/reviews/create">+ Nueva Resena</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/restaurants/nearby">📍 Restaurantes Cercanos</a></li>
           </ul>
         </li>
       </ul>
@@ -47,11 +62,15 @@
     const userInfoEl = document.getElementById('nav-user-info');
     if (userInfoEl) userInfoEl.textContent = `Hola, ${user.name} (${user.role})`;
 
-    // Ocultar sección Owner a clientes
-    if (user.role === 'customer') {
+    // Mostrar dropdown según rol
+    if (user.role === 'admin') {
+      const adminDropdown = document.getElementById('dropdown-admin');
+      if (adminDropdown) adminDropdown.style.display = '';
+    } else if (user.role === 'owner') {
       const ownerDropdown = document.getElementById('dropdown-owner');
-      if (ownerDropdown) ownerDropdown.style.display = 'none';
+      if (ownerDropdown) ownerDropdown.style.display = '';
     }
+    // clientes: solo ven el dropdown Cliente (siempre visible)
   }
 
   // Cerrar sesión

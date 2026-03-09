@@ -46,6 +46,7 @@ exports.getAllMenuItems = async (req, res, next) => {
   try {
     const { 
       restaurantId,
+      owner_id,
       isAvailable,
       tag,
       page = 1, 
@@ -56,7 +57,16 @@ exports.getAllMenuItems = async (req, res, next) => {
 
     // Construir filtro
     const filter = {};
-    if (restaurantId) filter.restaurantId = restaurantId;
+
+    if (restaurantId) {
+      filter.restaurantId = restaurantId;
+    } else if (owner_id) {
+      // Filtrar sólo los items que pertenecen a restaurantes de este owner
+      const Restaurant = require('../models/Restaurant');
+      const ownerRests = await Restaurant.find({ owner_id }, '_id').lean();
+      filter.restaurantId = { $in: ownerRests.map(r => r._id) };
+    }
+
     if (isAvailable !== undefined) filter.isAvailable = isAvailable === 'true';
     if (tag) filter.tags = { $regex: tag, $options: 'i' };
     const { q } = req.query;
