@@ -10,7 +10,7 @@ const mongoose = require('mongoose');
  */
 exports.createRestaurant = async (req, res, next) => {
   try {
-    const { name, address, owner_id, location, categories } = req.body;
+    const { name, address, owner_id, location, categories, image } = req.body;
     
     // Validación
     if (!name || !address || !owner_id || !location) {
@@ -24,14 +24,26 @@ exports.createRestaurant = async (req, res, next) => {
       address,
       owner_id,
       location,
-      categories: categories || []
+      categories: categories || [],
+      image: image || null
     });
     
     await restaurant.save();
+
+    // Promoción automática de Customer a Owner
+    let newRole = null;
+    const User = require('../models/User');
+    const user = await User.findById(owner_id);
+    if (user && user.role === 'customer') {
+      user.role = 'owner';
+      await user.save();
+      newRole = 'owner';
+    }
     
     res.status(201).json({ 
       message: 'Restaurante creado exitosamente', 
-      restaurant 
+      restaurant,
+      newRole
     });
   } catch (error) {
     next(error);

@@ -304,12 +304,17 @@ exports.removeItemFromOrder = async (req, res, next) => {
  */
 exports.deleteCancelledOrders = async (req, res, next) => {
   try {
-    const { monthsAgo = 6 } = req.query;
+    const { monthsAgo = 6, restaurantId } = req.query;
     
+    if (!restaurantId) {
+      return res.status(400).json({ error: 'restaurantId es requerido para esta limpieza' });
+    }
+
     const dateThreshold = new Date();
     dateThreshold.setMonth(dateThreshold.getMonth() - parseInt(monthsAgo));
 
     const result = await Order.deleteMany({
+      restaurantId,
       status: 'cancelled',
       updatedAt: { $lt: dateThreshold }
     });

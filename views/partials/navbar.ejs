@@ -6,7 +6,7 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav me-auto">
-        <li class="nav-item dropdown">
+        <li class="nav-item dropdown" id="dropdown-owner">
           <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Owner</a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="/restaurants">Mis Restaurantes</a></li>
@@ -29,9 +29,37 @@
           </ul>
         </li>
       </ul>
-      <span class="navbar-text text-muted small">
-        <a href="/health" class="text-success text-decoration-none" target="_blank">API</a>
+      </ul>
+      <span class="navbar-text d-flex align-items-center gap-3">
+        <span id="nav-user-info" class="text-white small fw-bold"></span>
+        <button id="logout-btn" class="btn btn-sm btn-outline-danger">Cerrar Sesión</button>
       </span>
     </div>
   </div>
 </nav>
+
+<script>
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    const user = JSON.parse(userStr);
+    
+    // Mostrar nombre del usuario logeado 
+    const userInfoEl = document.getElementById('nav-user-info');
+    if (userInfoEl) userInfoEl.textContent = `Hola, ${user.name} (${user.role})`;
+
+    // Ocultar sección Owner a clientes
+    if (user.role === 'customer') {
+      const ownerDropdown = document.getElementById('dropdown-owner');
+      if (ownerDropdown) ownerDropdown.style.display = 'none';
+    }
+  }
+
+  // Cerrar sesión
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    });
+  }
+</script>

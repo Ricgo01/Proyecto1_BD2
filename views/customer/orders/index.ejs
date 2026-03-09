@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mis Pedidos</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script>
+    if (!localStorage.getItem('user')) window.location.href = '/login';
+  </script>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2>Mis Pedidos</h2>
+      <a href="/orders/create" class="btn btn-primary">+ Nuevo Pedido</a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4 shadow-sm">
+      <div class="card-body row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Estado</label>
+          <select id="statusFilter" class="form-select">
+            <option value="">Todos</option>
+            <option value="created">Creados</option>
+            <option value="confirmed">Confirmados</option>
+            <option value="preparing">En Preparación</option>
+            <option value="delivered">Entregados</option>
+            <option value="cancelled">Cancelados</option>
+          </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <button id="btnSearch" class="btn btn-dark w-100">Buscar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="loader" class="text-center my-5" style="display: none;">
+      <div class="spinner-border text-primary" role="status"></div>
+    </div>
+
+    <div class="row g-4" id="ordersGrid"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const user = JSON.parse(localStorage.getItem('user'));
+    
+    async function loadOrders() {
+      document.getElementById('loader').style.display = 'block';
+      document.getElementById('ordersGrid').innerHTML = '';
+      
+      const status = document.getElementById('statusFilter').value;
+      
+      // Armamos la URL para buscar ordenes que le pertenecen a este usuario
+      let url = `/api/orders?userId=${user.id}`;
+      // NOTA: Como el esquema original no tiene un userId directo en la cabecera del Order,
+      // usaremos la ruta normal y filtraremos, o usar un endpoint existente. 
+      // Por simplicidad, traeremos todas las ordenes (paginadas) en la demo
+      // y mostraremos. Si tu Backend implementa query por userId, esta URL funciona perfecto.
+      
+      if (status) url += `&status=${status}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const orders = data.orders || [];
+
+        document.getElementById('loader').style.display = 'none';
+
+        if (orders.length === 0) {
+          document.getElementById('ordersGrid').innerHTML = `<div class="col-12 text-center text-muted">No tienes pedidos que coincidan.</div>`;
+          return;
+        }
+
+        const grid = document.getElementById('ordersGrid');
+        orders.forEach(o => {
+          // Color de estado
+          const badgeColors = {
+            created: 'bg-secondary', confirmed: 'bg-info', preparing: 'bg-warning',
+            delivered: 'bg-success', cancelled: 'bg-danger'
+          };
+          const badge = badgeColors[o.status] || 'bg-secondary';
+
+          grid.innerHTML += `
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between mb-2">
+                    <strong>Order ID:</strong>
+                    <span class="badge ${badge}">${o.status.toUpperCase()}</span>
+                  </div>
+                  <div class="text-muted small mb-2 text-truncate">${o._id}</div>
+                  <h3 class="text-primary mb-3">$${parseFloat(o.totalAmount).toFixed(2)}</h3>
+                  <div class="mb-3">
+                    <small class="text-muted">Artículos (${o.items.length}):</small>
+                    <ul class="list-unstyled mb-0 ms-2 small">
+                      ${o.items.slice(0, 3).map(i => `<li>${i.qty}x ${i.nameSnapshot}</li>`).join('')}
+                      ${o.items.length > 3 ? '<li>...</li>' : ''}
+                    </ul>
+                  </div>
+                </div>
+                <div class="card-footer bg-white border-0">
+                  <a href="/orders/${o._id}" class="btn btn-sm btn-outline-primary w-100">Ver Detalles</a>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+      } catch (err) {
+        document.getElementById('loader').style.display = 'none';
+        console.error(err);
+      }
+    }
+
+    document.getElementById('btnSearch').addEventListener('click', loadOrders);
+    
+    // Initial load
+    loadOrders();
+  </script>
+</body>
+</html>

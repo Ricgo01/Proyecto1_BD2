@@ -19,13 +19,12 @@
     <div class="card shadow-sm">
       <div class="card-body">
         <form id="form-create">
-          <!-- Restaurant search -->
-          <div class="mb-3 position-relative">
+          <!-- Restaurant Dropdown -->
+          <div class="mb-3">
             <label class="form-label fw-semibold">Restaurante *</label>
-            <input type="text" id="restaurant-search" class="form-control" required placeholder="Escribe para buscar restaurante..." autocomplete="off"/>
-            <input type="hidden" id="restaurantId"/>
-            <div id="restaurant-suggestions" class="suggestion-box border rounded d-none"></div>
-            <div id="restaurant-selected" class="mt-1 small text-success d-none"></div>
+            <select id="restaurantId" class="form-select" required>
+              <option value="">-- Selecciona un restaurante --</option>
+            </select>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Nombre *</label>
@@ -34,6 +33,10 @@
           <div class="mb-3">
             <label class="form-label fw-semibold">Precio *</label>
             <input type="number" id="price" class="form-control" required step="0.01" min="0" placeholder="35.50"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Foto del Platillo</label>
+            <input type="file" id="photo" class="form-control" accept="image/*"/>
           </div>
           <!-- Tags: multi-select from API + custom -->
           <div class="mb-3">
@@ -70,66 +73,30 @@
       } catch (_) {}
     }
 
-    // Restaurant autocomplete
-    document.getElementById('restaurant-search').addEventListener('input', function() {
-      clearTimeout(restTimer);
-      const q = this.value.trim();
-      document.getElementById('restaurantId').value = '';
-      document.getElementById('restaurant-selected').classList.add('d-none');
-      if (q.length < 1) {
-        document.getElementById('restaurant-suggestions').classList.add('d-none');
-        return;
-      }
-      restTimer = setTimeout(() => searchRestaurants(q), 250);
-    });
-
-    async function searchRestaurants(q) {
+    // Load Owner's Restaurants into Dropdown
+    async function loadOwnerRestaurants() {
+      const user = JSON.parse(localStorage.getItem('user'));
       try {
-        const res  = await fetch(`/api/restaurants?q=${encodeURIComponent(q)}&limit=8`);
+        const res = await fetch(`/api/restaurants?owner_id=${user.id}&limit=100`);
         const data = await res.json();
-        const box  = document.getElementById('restaurant-suggestions');
-        if (!data.restaurants?.length) {
-          box.innerHTML = '<div class="suggestion-item text-muted">Sin resultados</div>';
-        } else {
-          box.innerHTML = data.restaurants.map(r =>
-            `<div class="suggestion-item" onclick="selectRestaurant('${r._id}','${r.name.replace(/'/g,"\\'")}')">
-               <strong>${r.name}</strong> <span class="text-muted small">${r.address}</span>
-             </div>`
-          ).join('');
+        const sel = document.getElementById('restaurantId');
+        if (data.restaurants) {
+          data.restaurants.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r._id;
+            opt.textContent = r.name;
+            sel.appendChild(opt);
+          });
         }
-        box.classList.remove('d-none');
-      } catch (_) {}
-    }
-
-    function selectRestaurant(id, name) {
-      document.getElementById('restaurantId').value = id;
-      document.getElementById('restaurant-search').value = name;
-      const sel = document.getElementById('restaurant-selected');
-      sel.textContent = 'Restaurante seleccionado';
-      sel.classList.remove('d-none');
-      document.getElementById('restaurant-suggestions').classList.add('d-none');
-    }
-
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('#restaurant-search') && !e.target.closest('#restaurant-suggestions'))
-        document.getElementById('restaurant-suggestions').classList.add('d-none');
-    });
-
-    // Pre-fill from URL param
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('restaurantId')) {
-      const rid = urlParams.get('restaurantId');
-      document.getElementById('restaurantId').value = rid;
-      fetch(`/api/restaurants/${rid}`)
-        .then(r => r.json())
-        .then(d => {
-          if (d.restaurant) {
-            document.getElementById('restaurant-search').value = d.restaurant.name;
-            const sel = document.getElementById('restaurant-selected');
-            sel.textContent = 'Restaurante seleccionado';
-            sel.classList.remove('d-none');
-          }
-        }).catch(() => {});
+        
+        // Pre-fill from URL param if present
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('restaurantId')) {
+          sel.value = urlParams.get('restaurantId');
+        }
+      } catch (err) {
+        console.error("Error loading restaurants", err);
+      }
     }
 
     document.getElementById('form-create').addEventListener('submit', async (e) => {
@@ -144,10 +111,34 @@
       }
       const selectedTags = Array.from(document.getElementById('tags-select').selectedOptions).map(o => o.value);
       const customTags   = document.getElementById('tags-custom').value.split(',').map(t => t.trim()).filter(Boolean);
+      
+      let uploadedPhotoId = null;
+      const photoInput = document.getElementById('photo');
+      if (photoInput.files.length > 0) {
+        alertEl.className = 'alert alert-info';
+        alertEl.textContent = 'Subiendo foto pesada del platillo a GridFS...';
+        alertEl.classList.remove('d-none');
+        
+        const fd = new FormData();
+        fd.append('image', photoInput.files[0]);
+        
+        try {
+          const upRes = await fetch('/api/images/upload', { method: 'POST', body: fd });
+          const upData = await upRes.json();
+          if (upRes.ok) uploadedPhotoId = upData.fileId;
+          else throw new Error(upData.error);
+        } catch (e) {
+          alertEl.className = 'alert alert-danger';
+          alertEl.textContent = 'Error subiendo la foto: ' + e.message;
+          return;
+        }
+      }
+
       const body = {
         restaurantId,
         name:        document.getElementById('name').value.trim(),
         price:       parseFloat(document.getElementById('price').value),
+        photo:       uploadedPhotoId,
         tags:        [...new Set([...selectedTags, ...customTags])],
         isAvailable: document.getElementById('isAvailable').checked
       };
@@ -170,6 +161,7 @@
     });
 
     loadTags();
+    loadOwnerRestaurants();
   </script>
 </body>
 </html>

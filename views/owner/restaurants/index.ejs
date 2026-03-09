@@ -88,8 +88,9 @@
       const category = document.getElementById('filter-category').value;
       const rating   = document.getElementById('filter-rating').value.trim();
       const sort     = document.getElementById('filter-sort').value;
+      const user     = JSON.parse(localStorage.getItem('user'));
 
-      const params = new URLSearchParams({ page, limit: 10, sortBy: sort });
+      const params = new URLSearchParams({ page, limit: 10, sortBy: sort, owner_id: user.id });
       if (q)        params.set('q', q);
       if (category) params.set('category', category);
       if (rating)   params.set('minRating', rating);
@@ -105,8 +106,11 @@
       }
 
       tbody.innerHTML = data.restaurants.map(r => `
-        <tr>
-          <td><strong>${r.name}</strong></td>
+        <tr class="align-middle">
+          <td>
+            ${r.image ? `<img src="/api/images/${r.image}" alt="logo" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" class="me-2">` : ''}
+            <strong>${r.name}</strong>
+          </td>
           <td>${(r.categories || []).join(', ') || '—'}</td>
           <td><span class="badge bg-warning text-dark">${r.avgRating?.toFixed(1) ?? '—'}</span></td>
           <td class="text-muted small">${r.address}</td>

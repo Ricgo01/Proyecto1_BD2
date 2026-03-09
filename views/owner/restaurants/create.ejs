@@ -29,15 +29,14 @@
             <label class="form-label fw-semibold">Direccion *</label>
             <input type="text" id="address" class="form-control" required placeholder="Av. Reforma 123, CDMX"/>
           </div>
-
-          <!-- Owner search -->
-          <div class="mb-3 position-relative">
-            <label class="form-label fw-semibold">Owner *</label>
-            <input type="text" id="owner-search" class="form-control" placeholder="Escribe el nombre del owner..." autocomplete="off"/>
-            <input type="hidden" id="owner_id"/>
-            <div id="owner-suggestions" class="suggestion-box border rounded d-none"></div>
-            <div id="owner-selected" class="mt-1 small text-success d-none"></div>
+          
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Logo / Imagen</label>
+            <input type="file" id="image" class="form-control" accept="image/*"/>
+            <div class="form-text">La imagen se subirá nativamente a GridFS.</div>
           </div>
+
+          <!-- (El ID del Owner será automáticamente el mismo usuario creador) -->
 
           <div class="row mb-3">
             <div class="col">
@@ -82,59 +81,14 @@
       } catch (_) {}
     }
 
-    // Owner search
-    document.getElementById('owner-search').addEventListener('input', function() {
-      clearTimeout(ownerTimer);
-      const q = this.value.trim();
-      document.getElementById('owner_id').value = '';
-      document.getElementById('owner-selected').classList.add('d-none');
-      if (q.length < 1) {
-        document.getElementById('owner-suggestions').classList.add('d-none');
-        return;
-      }
-      ownerTimer = setTimeout(() => searchOwners(q), 250);
-    });
-
-    async function searchOwners(q) {
-      try {
-        const res  = await fetch(`/api/users?q=${encodeURIComponent(q)}&limit=8`);
-        const data = await res.json();
-        const box  = document.getElementById('owner-suggestions');
-        if (!data.users?.length) {
-          box.innerHTML = '<div class="suggestion-item text-muted">Sin resultados</div>';
-        } else {
-          box.innerHTML = data.users.map(u =>
-            `<div class="suggestion-item" onclick="selectOwner('${u._id}','${u.name.replace(/'/g,"\\'")} (${u.email})')">
-               <strong>${u.name}</strong> <span class="text-muted small">${u.email}</span>
-               <span class="badge bg-secondary ms-1">${u.role}</span>
-             </div>`
-          ).join('');
-        }
-        box.classList.remove('d-none');
-      } catch (_) {}
-    }
-
-    function selectOwner(id, label) {
-      document.getElementById('owner_id').value = id;
-      document.getElementById('owner-search').value = label;
-      const sel = document.getElementById('owner-selected');
-      sel.textContent = 'Owner seleccionado';
-      sel.classList.remove('d-none');
-      document.getElementById('owner-suggestions').classList.add('d-none');
-    }
-
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('#owner-search') && !e.target.closest('#owner-suggestions'))
-        document.getElementById('owner-suggestions').classList.add('d-none');
-    });
-
     document.getElementById('form-create').addEventListener('submit', async (e) => {
       e.preventDefault();
       const alertEl = document.getElementById('alert');
-      const owner_id = document.getElementById('owner_id').value.trim();
+      const owner_id = JSON.parse(localStorage.getItem('user'))?.id;
+      
       if (!owner_id) {
         alertEl.className = 'alert alert-warning';
-        alertEl.textContent = 'Selecciona un owner de la lista';
+        alertEl.textContent = 'Tu sesión es inválida. Inicia sesión de nuevo.';
         alertEl.classList.remove('d-none');
         return;
       }
@@ -142,12 +96,33 @@
       // Collect categories: selected from list + custom typed ones
       const selectedOpts   = Array.from(document.getElementById('categories-select').selectedOptions).map(o => o.value);
       const customCats     = document.getElementById('categories-custom').value.split(',').map(c => c.trim()).filter(Boolean);
-      const allCategories  = [...new Set([...selectedOpts, ...customCats])];
+      let uploadedImageId = null;
+      const imageInput = document.getElementById('image');
+      if (imageInput.files.length > 0) {
+        alertEl.className = 'alert alert-info';
+        alertEl.textContent = 'Subiendo imagen pesada a GridFS...';
+        alertEl.classList.remove('d-none');
+        
+        const fd = new FormData();
+        fd.append('image', imageInput.files[0]);
+        
+        try {
+          const upRes = await fetch('/api/images/upload', { method: 'POST', body: fd });
+          const upData = await upRes.json();
+          if (upRes.ok) uploadedImageId = upData.fileId;
+          else throw new Error(upData.error);
+        } catch (e) {
+          alertEl.className = 'alert alert-danger';
+          alertEl.textContent = 'Error subiendo la imagen: ' + e.message;
+          return;
+        }
+      }
 
       const body = {
         name:       document.getElementById('name').value.trim(),
         address:    document.getElementById('address').value.trim(),
         owner_id,
+        image:      uploadedImageId,
         location: {
           type: 'Point',
           coordinates: [
@@ -166,10 +141,17 @@
         });
         const data = await res.json();
         if (res.ok) {
+          // Refrescar sesión local si el backend los ascendió de Customer a Owner
+          if (data.newRole) {
+            const userState = JSON.parse(localStorage.getItem('user'));
+            userState.role = data.newRole;
+            localStorage.setItem('user', JSON.stringify(userState));
+          }
+
           alertEl.className = 'alert alert-success';
-          alertEl.textContent = `Restaurante creado: ${data.restaurant.name}`;
+          alertEl.textContent = `Restaurante creado: ${data.restaurant.name}. ${data.newRole ? '¡Felicidades, ahora eres un Owner!' : ''}`;
           alertEl.classList.remove('d-none');
-          setTimeout(() => window.location.href = '/restaurants', 1500);
+          setTimeout(() => window.location.href = '/restaurants', 2000);
         } else {
           alertEl.className = 'alert alert-danger';
           alertEl.textContent = data.error?.message || data.error || 'Error al crear';

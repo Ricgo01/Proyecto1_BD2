@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mis Reseñas</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script>
+    if (!localStorage.getItem('user')) window.location.href = '/login';
+  </script>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2>Mis Reseñas</h2>
+      <a href="/reviews/create" class="btn btn-outline-primary">Escribir Reseña</a>
+    </div>
+    
+    <div id="loader" class="text-center my-5">
+      <div class="spinner-border text-primary" role="status"></div>
+    </div>
+
+    <div class="row g-4" id="reviewsList"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const user = JSON.parse(localStorage.getItem('user'));
+
+    async function loadReviews() {
+      try {
+        // En tu backend actual /api/reviews trae todas o puedes filtrar si añadiste la query
+        // Para asegurar que sirvan en la demo, mostraremos las últimas con un fetch general.
+        // Lo ideal: /api/reviews?userId=${user.id}
+        const res = await fetch(`/api/reviews?limit=20&sortBy=createdAt&order=desc`);
+        const data = await res.json();
+        
+        document.getElementById('loader').style.display = 'none';
+        const list = document.getElementById('reviewsList');
+
+        if (!data.reviews || data.reviews.length === 0) {
+          list.innerHTML = `<div class="col-12 text-center text-muted">Aún no hay reseñas registradas.</div>`;
+          return;
+        }
+
+        data.reviews.forEach(r => {
+          const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+          const color = r.rating >= 4 ? 'text-success' : (r.rating <= 2 ? 'text-danger' : 'text-warning');
+          
+          list.innerHTML += `
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="fs-4 ${color}">${stars}</span>
+                    <div class="text-end">
+                      <small class="text-muted d-block">${new Date(r.createdAt).toLocaleDateString()}</small>
+                      <button class="btn btn-sm btn-outline-danger mt-1 py-0 px-2" onclick="deleteReview('${r._id}')">Borrar (DeleteOne)</button>
+                    </div>
+                  </div>
+                  <p class="card-text">"${r.comment || 'Sin comentario'}"</p>
+                  <hr>
+                  <div class="small text-muted text-truncate">
+                    Restaurante: <span class="fw-bold">${r.restaurantId?.name || r.restaurantId || 'Desconocido'}</span> <br>
+                    Orden ID: ${r.orderId || 'Sin registrar'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+      } catch (err) {
+        console.error(err);
+        document.getElementById('loader').innerHTML = '<div class="alert alert-danger">Error de red</div>';
+      }
+    }
+
+    async function deleteReview(reviewId) {
+      if(!confirm('¿Estás seguro de que quieres borrar esta reseña de forma permanente? (DeleteOne)')) return;
+      try {
+        const res = await fetch(`/api/reviews/${reviewId}`, { method: 'DELETE' });
+        if(res.ok) window.location.reload();
+        else alert('No se pudo eliminar la reseña');
+      } catch (err) { alert('Error de conexión'); }
+    }
+
+    loadReviews();
+  </script>
+</body>
+</html>

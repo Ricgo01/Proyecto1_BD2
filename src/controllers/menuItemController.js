@@ -9,7 +9,7 @@ const MenuItem = require('../models/MenuItem');
  */
 exports.createMenuItem = async (req, res, next) => {
   try {
-    const { restaurantId, name, price, tags, isAvailable } = req.body;
+    const { restaurantId, name, price, tags, isAvailable, photo } = req.body;
     
     // Validación
     if (!restaurantId || !name || price === undefined) {
@@ -23,7 +23,8 @@ exports.createMenuItem = async (req, res, next) => {
       name,
       price,
       tags: tags || [],
-      isAvailable: isAvailable !== undefined ? isAvailable : true
+      isAvailable: isAvailable !== undefined ? isAvailable : true,
+      photo: photo || null
     });
     
     await menuItem.save();
@@ -155,26 +156,25 @@ exports.deleteMenuItem = async (req, res, next) => {
 };
 
 /**
- * UPDATE - Actualizar disponibilidad masiva
- * Ejemplo: marcar múltiples items como no disponibles
+ * UPDATE - Actualizar disponibilidad masiva (para un restaurante)
  */
 exports.bulkUpdateAvailability = async (req, res, next) => {
   try {
-    const { itemIds, isAvailable } = req.body;
+    const { isAvailable, restaurantId } = req.body;
     
-    if (!Array.isArray(itemIds) || isAvailable === undefined) {
+    if (isAvailable === undefined || !restaurantId) {
       return res.status(400).json({ 
-        error: 'Campos requeridos: itemIds (array), isAvailable (boolean)' 
+        error: 'Campos requeridos: isAvailable (boolean) y restaurantId' 
       });
     }
 
     const result = await MenuItem.updateMany(
-      { _id: { $in: itemIds } },
+      { restaurantId },
       { $set: { isAvailable } }
     );
 
     res.json({ 
-      message: 'Disponibilidad actualizada exitosamente',
+      message: 'Disponibilidad actualizada exitosamente para el restaurante',
       modifiedCount: result.modifiedCount
     });
   } catch (error) {

@@ -22,11 +22,11 @@
     <div class="card shadow-sm mb-4">
       <div class="card-body">
         <div class="row g-2">
-          <!-- Restaurant search -->
-          <div class="col-md-4 position-relative">
-            <input type="text" id="restaurant-search" class="form-control" placeholder="Buscar restaurante..." autocomplete="off"/>
-            <input type="hidden" id="filter-restaurantId"/>
-            <div id="restaurant-suggestions" class="suggestion-box border rounded d-none"></div>
+          <!-- Restaurant dropdown -->
+          <div class="col-md-4">
+            <select id="filter-restaurantId" class="form-select">
+              <option value="">Todos mis restaurantes</option>
+            </select>
           </div>
           <!-- Name search -->
           <div class="col-md-3">
@@ -88,41 +88,33 @@
       } catch (_) {}
     }
 
-    // Restaurant autocomplete
-    document.getElementById('restaurant-search').addEventListener('input', function() {
-      clearTimeout(restTimer);
-      const q = this.value.trim();
-      document.getElementById('filter-restaurantId').value = '';
-      if (q.length < 1) {
-        document.getElementById('restaurant-suggestions').classList.add('d-none');
-        return;
-      }
-      restTimer = setTimeout(() => searchRestaurants(q), 250);
-    });
-
-    async function searchRestaurants(q) {
+    // Load Owner's Restaurants into Dropdown
+    async function loadOwnerRestaurants() {
+      const user = JSON.parse(localStorage.getItem('user'));
       try {
-        const res  = await fetch(`/api/restaurants?q=${encodeURIComponent(q)}&limit=8`);
+        const res = await fetch(`/api/restaurants?owner_id=${user.id}&limit=100`);
         const data = await res.json();
-        const box  = document.getElementById('restaurant-suggestions');
-        if (!data.restaurants?.length) {
-          box.innerHTML = '<div class="suggestion-item text-muted">Sin resultados</div>';
-        } else {
-          box.innerHTML = data.restaurants.map(r =>
-            `<div class="suggestion-item" onclick="selectRestaurant('${r._id}','${r.name.replace(/'/g,"\\'")}')">
-               <strong>${r.name}</strong> <span class="text-muted small">${r.address}</span>
-             </div>`
-          ).join('');
+        const sel = document.getElementById('filter-restaurantId');
+        if (data.restaurants) {
+          data.restaurants.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r._id;
+            opt.textContent = r.name;
+            sel.appendChild(opt);
+          });
         }
-        box.classList.remove('d-none');
-      } catch (_) {}
-    }
-
-    function selectRestaurant(id, name) {
-      document.getElementById('filter-restaurantId').value = id;
-      document.getElementById('restaurant-search').value = name;
-      document.getElementById('restaurant-suggestions').classList.add('d-none');
-      loadMenu(1);
+        
+        // Pre-fill from URL param if present
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('restaurantId')) {
+          sel.value = urlParams.get('restaurantId');
+        }
+        
+        // Cargar menú después de tener la lista
+        loadMenu(1);
+      } catch (err) {
+        console.error("Error loading restaurants", err);
+      }
     }
 
     document.getElementById('filter-name').addEventListener('input', function() {
@@ -130,13 +122,9 @@
       nameTimer = setTimeout(() => loadMenu(1), 300);
     });
 
+    document.getElementById('filter-restaurantId').addEventListener('change', () => loadMenu(1));
     document.getElementById('filter-tag').addEventListener('change', () => loadMenu(1));
     document.getElementById('filter-available').addEventListener('change', () => loadMenu(1));
-
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('#restaurant-search') && !e.target.closest('#restaurant-suggestions'))
-        document.getElementById('restaurant-suggestions').classList.add('d-none');
-    });
 
     async function loadMenu(page = 1) {
       const restaurantId = document.getElementById('filter-restaurantId').value.trim();
@@ -160,8 +148,11 @@
       }
 
       tbody.innerHTML = data.menuItems.map(m => `
-        <tr>
-          <td>${m.name}</td>
+        <tr class="align-middle">
+          <td>
+            ${m.photo ? `<img src="/api/images/${m.photo}" alt="foto" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" class="me-2">` : ''}
+            ${m.name}
+          </td>
           <td>Q${m.price?.toFixed(2)}</td>
           <td>${(m.tags||[]).map(t=>`<span class="badge bg-info text-dark me-1">${t}</span>`).join('') || '—'}</td>
           <td>
@@ -205,19 +196,8 @@
       nav.innerHTML = html + '</ul>';
     }
 
-    // Pre-fill restaurantId from URL param if present
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('restaurantId')) {
-      document.getElementById('filter-restaurantId').value = urlParams.get('restaurantId');
-      // Try to load restaurant name
-      fetch(`/api/restaurants/${urlParams.get('restaurantId')}`)
-        .then(r => r.json())
-        .then(d => { if (d.restaurant) document.getElementById('restaurant-search').value = d.restaurant.name; })
-        .catch(() => {});
-      loadMenu(1);
-    }
-
     loadTags();
+    loadOwnerRestaurants();
   </script>
 </body>
 </html>

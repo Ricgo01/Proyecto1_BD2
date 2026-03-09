@@ -14,6 +14,7 @@ const reviewRoutes = require('./reviewRoutes');
 const reportRoutes = require('./reportRoutes');
 const transactionRoutes = require('./transactionRoutes');
 const queryAnalysisRoutes = require('./queryAnalysisRoutes');
+const imageRoutes = require('./imageRoutes');
 
 // Montar rutas
 router.use('/users', userRoutes);
@@ -24,6 +25,7 @@ router.use('/reviews', reviewRoutes);
 router.use('/reports', reportRoutes);
 router.use('/transactions', transactionRoutes);
 router.use('/query-analysis', queryAnalysisRoutes);
+router.use('/images', imageRoutes);
 
 // Ruta raíz de API
 router.get('/', (req, res) => {

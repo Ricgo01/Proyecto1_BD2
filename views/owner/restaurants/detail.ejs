@@ -16,11 +16,11 @@
     </div>
 
     <!-- Menú del restaurante -->
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h4>Menu</h4>
+    <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
+      <h4>Menú</h4>
       <a href="/menu/create" class="btn btn-sm btn-dark" id="btn-add-item">+ Item</a>
     </div>
-    <div class="card shadow-sm">
+    <div class="card shadow-sm mb-4">
       <div class="card-body p-0">
         <table class="table table-hover mb-0">
           <thead class="table-secondary">
@@ -30,6 +30,58 @@
             <tr><td colspan="5" class="text-center py-3 text-muted">Cargando...</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- Pedidos del restaurante -->
+      <div class="col-md-6 mb-4">
+        <h4 class="mb-3">Últimas Órdenes</h4>
+        <div class="card shadow-sm">
+          <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="orders-list">
+              <li class="list-group-item text-center text-muted py-3">Cargando...</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reseñas del restaurante -->
+      <div class="col-md-6 mb-4">
+        <h4 class="mb-3">Reseñas de Clientes</h4>
+        <div class="card shadow-sm">
+          <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="reviews-list">
+              <li class="list-group-item text-center text-muted py-3">Cargando...</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gráficos de Mongo Charts -->
+      <div class="col-md-4 mb-4">
+        <h4 class="mb-3">Ventas Mensuales</h4>
+        <div class="card shadow-sm">
+          <div class="card-body text-center p-0" id="chart-container-1" style="background: #f8f9fa;">
+            <div class="py-5 text-muted">Cargando gráfico de desempeño...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <h4 class="mb-3">Platillos Más Vendidos (Top)</h4>
+        <div class="card shadow-sm">
+          <div class="card-body text-center p-0" id="chart-container-2" style="background: #f8f9fa;">
+            <div class="py-5 text-muted">Cargando gráfico de desempeño...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <h4 class="mb-3">Resumen de Calificaciones</h4>
+        <div class="card shadow-sm">
+          <div class="card-body text-center p-0" id="chart-container-3" style="background: #f8f9fa;">
+            <div class="py-5 text-muted">Cargando gráfico de desempeño...</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -49,11 +101,22 @@
       const r = data.restaurant;
       document.getElementById('card-restaurant').innerHTML = `
         <div class="card-body">
-          <div class="row">
-            <div class="col-md-8">
+          <div class="row align-items-center">
+            ${r.image ? `
+            <div class="col-md-2 text-center mb-3 mb-md-0">
+               <img src="/api/images/${r.image}" class="img-fluid rounded shadow-sm" style="max-height: 120px; object-fit: cover;">
+            </div>
+            <div class="col-md-6">` : `<div class="col-md-8">`}
               <h3 class="mb-1">${r.name}</h3>
               <p class="text-muted mb-2">${r.address}</p>
-              <div class="mb-2">${(r.categories||[]).map(c=>`<span class="badge bg-secondary me-1">${c}</span>`).join('')}</div>
+              <div class="mb-3">${(r.categories||[]).map(c=>`<span class="badge bg-secondary me-1">${c}</span>`).join('')}</div>
+              
+              <!-- Formulario de Categoría Nueva ($addToSet) -->
+              <div class="d-flex align-items-center mb-2">
+                <input type="text" id="newCategory" class="form-control form-control-sm w-auto me-2" placeholder="Nueva Categoría ($addToSet)">
+                <button class="btn btn-sm btn-outline-primary" onclick="addCategory('${r._id}')">Añadir</button>
+              </div>
+
             </div>
             <div class="col-md-4 text-md-end">
               <div class="fs-3 fw-bold text-warning">${r.avgRating?.toFixed(1) ?? '—'}</div>
@@ -73,8 +136,11 @@
         return;
       }
       tbody.innerHTML = data.menuItems.map(m => `
-        <tr>
-          <td>${m.name}</td>
+        <tr class="align-middle">
+          <td>
+            ${m.photo ? `<img src="/api/images/${m.photo}" alt="foto" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" class="me-2">` : ''}
+            ${m.name}
+          </td>
           <td>Q${m.price?.toFixed(2)}</td>
           <td>${(m.tags||[]).map(t=>`<span class="badge bg-info text-dark me-1">${t}</span>`).join('') || '—'}</td>
           <td>
@@ -88,8 +154,136 @@
         </tr>`).join('');
     }
 
+    async function addCategory(restId) {
+      const cat = document.getElementById('newCategory').value.trim();
+      if(!cat) return alert('Escribe una categoría a añadir');
+      
+      const res = await fetch(`/api/restaurants/${restId}/categories`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: cat })
+      });
+      if(res.ok) window.location.reload();
+      else alert((await res.json()).error || 'Error añadiendo categoría (evitando duplicados)');
+    }
+
+    async function loadReviews() {
+      try {
+        // Obtener la mayor cantidad posible (o podrías implementar paginación aquí luego)
+        const res = await fetch(`/api/reviews?restaurantId=${restaurantId}&limit=100`);
+        const data = await res.json();
+        const list = document.getElementById('reviews-list');
+        if (!data.reviews?.length) {
+          list.innerHTML = '<li class="list-group-item text-center text-muted py-3">Este restaurante aún no tiene reseñas.</li>';
+          return;
+        }
+        list.innerHTML = data.reviews.map(r => `
+          <li class="list-group-item">
+            <div class="d-flex justify-content-between">
+              <strong>${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</strong>
+              <small class="text-muted">${new Date(r.createdAt).toLocaleDateString()}</small>
+            </div>
+            <p class="mb-0 mt-1 small">${r.comment || '<i>Sin comentario</i>'}</p>
+          </li>
+        `).join('');
+      } catch (err) {}
+    }
+
+    async function updateOrderStatus(orderId, newStatus) {
+      if(!confirm(`¿Cambiar estado de la orden a: ${newStatus.toUpperCase()}?`)) {
+        // Restaurar dropdown al valor original si el usuario cancela
+        loadOrders(); 
+        return;
+      }
+      try {
+        const res = await fetch(`/api/orders/${orderId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        if(res.ok) alert('Estado actualizado');
+        else alert('Error al actualizar estado');
+        loadOrders();
+      } catch (err) { alert('Error de conexión'); }
+    }
+
+    async function loadOrders() {
+      try {
+        // Obtener sin límite corto (o con límite alto) para ver "todo"
+        const res = await fetch(`/api/orders?restaurantId=${restaurantId}&limit=100`);
+        const data = await res.json();
+        const list = document.getElementById('orders-list');
+        if (!data.orders?.length) {
+          list.innerHTML = '<li class="list-group-item text-center text-muted py-3">No hay pedidos registrados todavía.</li>';
+          return;
+        }
+        
+        list.innerHTML = data.orders.map(o => {
+          const s = o.status;
+          return `
+          <li class="list-group-item">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <select class="form-select form-select-sm w-auto fw-bold text-dark 
+                ${s === 'delivered' ? 'bg-success text-white' : s === 'cancelled' ? 'bg-danger text-white' : 'bg-primary text-white'}" 
+                onchange="updateOrderStatus('${o._id}', this.value)">
+                <option value="created" ${s==='created'?'selected':''}>CREATED</option>
+                <option value="confirmed" ${s==='confirmed'?'selected':''}>CONFIRMED</option>
+                <option value="preparing" ${s==='preparing'?'selected':''}>PREPARING</option>
+                <option value="delivered" ${s==='delivered'?'selected':''}>DELIVERED</option>
+                <option value="cancelled" ${s==='cancelled'?'selected':''}>CANCELLED</option>
+              </select>
+              <span class="fw-bold">$${o.totalAmount.toFixed(2)}</span>
+            </div>
+            <div class="small text-muted d-flex justify-content-between mt-2">
+              <span>Por: <a href="/orders/${o._id}" class="text-decoration-none">${o.userId?.name || 'Cliente'} (Ver Folio)</a></span>
+              <span>${new Date(o.createdAt).toLocaleDateString()}</span>
+            </div>
+          </li>
+        `}).join('');
+      } catch (err) {}
+    }
+
+    function loadChart() {
+      // Configuraciones base extraidas de tus URLs
+      const baseUrl1 = "https://charts.mongodb.com/charts-project-0-zepvwzg/embed/charts?id=5ca2b87b-2b89-4db1-a1a7-10d53fdfca10&maxDataAge=14400&theme=light&autoRefresh=true";
+      const baseUrl2 = "https://charts.mongodb.com/charts-project-0-zepvwzg/embed/charts?id=6918eed7-b846-48d0-80cc-67354213688b&maxDataAge=14400&theme=light&autoRefresh=true";
+      const baseUrl3 = "https://charts.mongodb.com/charts-project-0-zepvwzg/embed/charts?id=28eb7db3-97b1-4b15-9f18-398e2e35f65b&maxDataAge=14400&theme=light&autoRefresh=true";
+      
+      // MongoDB requiere especificar explícitamente que es un $oid para hacer Match contra ObjectIds nativos
+      const filtroJson = { "restaurantId": { "$oid": restaurantId } };
+      const filtroCodificado = encodeURIComponent(JSON.stringify(filtroJson));
+
+      // Armamos los iframes inyectando el filtroCodificado
+      const iframeHTML1 = `<iframe 
+        style="background: #FFFFFF; border: none; border-radius: 2px; width: 100%; min-height: 480px;" 
+        src="${baseUrl1}&filter=${filtroCodificado}">
+      </iframe>`;
+
+      const iframeHTML2 = `<iframe 
+        style="background: #FFFFFF; border: none; border-radius: 2px; width: 100%; min-height: 480px;" 
+        src="${baseUrl2}&filter=${filtroCodificado}">
+      </iframe>`;
+      
+      const iframeHTML3 = `<iframe 
+        style="background: #FFFFFF; border: none; border-radius: 2px; width: 100%; min-height: 480px;" 
+        src="${baseUrl3}&filter=${filtroCodificado}">
+      </iframe>`;
+
+      // Los inyectamos en el HTML
+      const container1 = document.getElementById('chart-container-1');
+      if(container1) container1.innerHTML = iframeHTML1;
+
+      const container2 = document.getElementById('chart-container-2');
+      if(container2) container2.innerHTML = iframeHTML2;
+      
+      const container3 = document.getElementById('chart-container-3');
+      if(container3) container3.innerHTML = iframeHTML3;
+    }
+
     loadRestaurant();
     loadMenu();
+    loadReviews();
+    loadOrders();
+    loadChart();
   </script>
 </body>
 </html>

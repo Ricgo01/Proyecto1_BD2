@@ -23,7 +23,7 @@
 - [x] `src/models/MenuItem.js`
 - [x] `src/models/Order.js`
 - [x] `src/models/Review.js`
-- [ ] `src/models/AuditLog.js` ← **FALTA** (necesario para Transacción 2)
+- [x] `src/models/AuditLog.js` ← **FALTA** (necesario para Transacción 2)
 
 ### Controllers
 - [x] `src/controllers/userController.js` — usa `next(error)`
@@ -58,11 +58,11 @@
 - [x] `views/partials/navbar.ejs` — sin emojis, dropdown Owner + Cliente
 - [x] `views/index.ejs` — dashboard con stats y links por rol (sin emojis)
 - [x] `views/owner/` — páginas de gestión completas
-- [ ] `views/customer/orders/index.ejs` ← **FALTA** (archivo vacío)
-- [ ] `views/customer/orders/create.ejs` ← **FALTA** (archivo vacío)
-- [ ] `views/customer/orders/detail.ejs` ← **FALTA** (archivo vacío)
-- [ ] `views/customer/reviews/index.ejs` ← **FALTA** (archivo vacío)
-- [ ] `views/customer/reviews/create.ejs` ← **FALTA** (archivo vacío)
+- [x] `views/customer/orders/index.ejs` ← **FALTA** (archivo vacío)
+- [x] `views/customer/orders/create.ejs` ← **FALTA** (archivo vacío)
+- [x] `views/customer/orders/detail.ejs` ← **FALTA** (archivo vacío)
+- [x] `views/customer/reviews/index.ejs` ← **FALTA** (archivo vacío)
+- [x] `views/customer/reviews/create.ejs` ← **FALTA** (archivo vacío)
 - [x] `public/css/` y `public/js/`
 
 ---
@@ -135,10 +135,10 @@
 ---
 
 ## 5) GridFS (archivos obligatorios)
-- [ ] Endpoint upload imagen → guarda en GridFS ← **FALTA** (Ricardo)
-- [ ] Guarda `fileId` en `Restaurant.image` / `MenuItem.photo` ← **FALTA**
-- [ ] Endpoint servir imagen por streaming ← **FALTA**
-- [ ] Evidencia en UI ← **FALTA**
+- [x] Endpoint upload imagen → guarda en GridFS ← **FALTA** (Ricardo)
+- [x] Guarda `fileId` en `Restaurant.image` / `MenuItem.photo` ← **FALTA**
+- [x] Endpoint servir imagen por streaming ← **FALTA**
+- [x] Evidencia en UI ← **FALTA**
 
 ---
 
@@ -161,7 +161,7 @@
 - [x] Transacción 1: crear Review + actualizar ratingCount + recalcular avgRating
   - [x] valida: order debe estar `delivered`
   - [x] valida: no puede existir reseña previa para ese order
-- [ ] Transacción 2: cancelar order + crear AuditLog ← **FALTA AuditLog model**
+- [x] Transacción 2: cancelar order + crear AuditLog ← **FALTA AuditLog model**
   - [x] valida: no cancelar delivered
   - [x] valida: no cancelar ya cancelados
 
@@ -182,7 +182,7 @@
 
 ## 9) Datos masivos (seed)
 - [x] `npm run seed` genera 50,000+ documentos
-- [ ] BulkWrite evidencia en código ← verificar en seed.js
+- [x] BulkWrite evidencia en código ← verificar en seed.js
 
 ---
 
@@ -202,11 +202,11 @@
 - [x] `views/owner/reports/index.ejs` — dashboard de agregaciones
 
 ### Rol: Customer (consumo) — FALTA
-- [ ] `views/customer/orders/index.ejs` ← **FALTA**
-- [ ] `views/customer/orders/create.ejs` ← **FALTA**
-- [ ] `views/customer/orders/detail.ejs` ← **FALTA**
-- [ ] `views/customer/reviews/index.ejs` ← **FALTA**
-- [ ] `views/customer/reviews/create.ejs` ← **FALTA**
+- [x] `views/customer/orders/index.ejs` ← **FALTA**
+- [x] `views/customer/orders/create.ejs` ← **FALTA**
+- [x] `views/customer/orders/detail.ejs` ← **FALTA**
+- [x] `views/customer/reviews/index.ejs` ← **FALTA**
+- [x] `views/customer/reviews/create.ejs` ← **FALTA**
 
 
 > Objetivo: que TODO lo requerido exista y se pueda demostrar en la presentación.
@@ -232,7 +232,7 @@
 - [x] `src/models/MenuItem.js`
 - [x] `src/models/Order.js`
 - [x] `src/models/Review.js`
-- [ ] `src/models/AuditLog.js` ← **FALTA** (necesario para Transacción 2)
+- [x] `src/models/AuditLog.js` ← **FALTA** (necesario para Transacción 2)
 
 ### Controllers
 - [x] `src/controllers/userController.js`
@@ -263,12 +263,12 @@
 - [x] `src/scripts/createIndexes.js`
 
 ### Views / Public (EJS)
-- [ ] `views/partials/navbar.ejs` ← **FALTA**
-- [ ] `views/index.ejs` — solo boilerplate, necesita dashboard real
+- [x] `views/partials/navbar.ejs` ← **FALTA**
+- [x] `views/index.ejs` — solo boilerplate, necesita dashboard real
 - [ ] `views/owner/` — páginas de gestión ← **FALTA**
 - [ ] `views/customer/` — páginas de cliente ← **FALTA**
-- [ ] `src/routes/viewRoutes.js` ← **FALTA**
-- [ ] `public/css/` y `public/js/` vacíos
+- [x] `src/routes/viewRoutes.js` ← **FALTA**
+- [x] `public/css/` y `public/js/` vacíos
 
 ---
 
@@ -339,10 +339,10 @@
 ---
 
 ## 5) GridFS (archivos obligatorios)
-- [ ] Endpoint upload imagen → guarda en GridFS ← **FALTA** (Ricardo)
-- [ ] Guarda `fileId` en `Restaurant.image` / `MenuItem.photo` ← **FALTA**
-- [ ] Endpoint servir imagen por streaming ← **FALTA**
-- [ ] Evidencia en UI ← **FALTA**
+- [x] Endpoint upload imagen → guarda en GridFS ← **FALTA** (Ricardo)
+- [x] Guarda `fileId` en `Restaurant.image` / `MenuItem.photo` ← **FALTA**
+- [x] Endpoint servir imagen por streaming ← **FALTA**
+- [x] Evidencia en UI ← **FALTA**
 
 ---
 
@@ -362,7 +362,7 @@
 - [x] Transacción 1: crear Review + actualizar ratingCount + recalcular avgRating
   - [x] valida: order debe estar `delivered`
   - [x] valida: no puede existir reseña previa para ese order
-- [ ] Transacción 2: cancelar order + crear AuditLog ← **FALTA AuditLog model**
+- [x] Transacción 2: cancelar order + crear AuditLog ← **FALTA AuditLog model**
   - [x] valida: no cancelar delivered
   - [x] valida: no cancelar ya cancelados
 
@@ -383,31 +383,31 @@
 
 ## 9) Datos masivos (seed)
 - [x] `npm run seed` genera 50,000+ documentos
-- [ ] BulkWrite evidencia en código ← verificar en seed.js
+- [x] BulkWrite evidencia en código ← verificar en seed.js
 
 ---
 
 ## 10) Frontend EJS — separado por rol
 ### Compartido
-- [ ] `views/partials/navbar.ejs` ← **FALTA**
-- [ ] `views/index.ejs` Dashboard con stats y links por rol ← **FALTA**
-- [ ] `src/routes/viewRoutes.js` ← **FALTA**
+- [x] `views/partials/navbar.ejs` ← **FALTA**
+- [x] `views/index.ejs` Dashboard con stats y links por rol ← **FALTA**
+- [x] `src/routes/viewRoutes.js` ← **FALTA**
 
 ### Rol: Owner (gestión)
-- [ ] `views/owner/restaurants/index.ejs` — listar + filtro + search + paginación ← **FALTA**
-- [ ] `views/owner/restaurants/create.ejs` — formulario crear ← **FALTA**
-- [ ] `views/owner/restaurants/detail.ejs` — detalle + sección menú ← **FALTA**
-- [ ] `views/owner/menu/index.ejs` — listar por restaurante + toggle disponibilidad ← **FALTA**
-- [ ] `views/owner/menu/create.ejs` — formulario crear item ← **FALTA**
-- [ ] `views/owner/menu/edit.ejs` — formulario editar item ← **FALTA**
-- [ ] `views/owner/reports/index.ejs` — dashboard de agregaciones ← **FALTA**
+- [x] `views/owner/restaurants/index.ejs` — listar + filtro + search + paginación ← **FALTA**
+- [x] `views/owner/restaurants/create.ejs` — formulario crear ← **FALTA**
+- [x] `views/owner/restaurants/detail.ejs` — detalle + sección menú ← **FALTA**
+- [x] `views/owner/menu/index.ejs` — listar por restaurante + toggle disponibilidad ← **FALTA**
+- [x] `views/owner/menu/create.ejs` — formulario crear item ← **FALTA**
+- [x] `views/owner/menu/edit.ejs` — formulario editar item ← **FALTA**
+- [x] `views/owner/reports/index.ejs` — dashboard de agregaciones ← **FALTA**
 
 ### Rol: Customer (consumo)
-- [ ] `views/customer/orders/index.ejs` — listar (paginado + filtros) ← **FALTA**
-- [ ] `views/customer/orders/create.ejs` — selección restaurante → items → submit ← **FALTA**
-- [ ] `views/customer/orders/detail.ejs` — detalle con items embebidos + cambiar status ← **FALTA**
-- [ ] `views/customer/reviews/index.ejs` — listar reviews por restaurante ← **FALTA**
-- [ ] `views/customer/reviews/create.ejs` — formulario crear review ← **FALTA**
+- [x] `views/customer/orders/index.ejs` — listar (paginado + filtros) ← **FALTA**
+- [x] `views/customer/orders/create.ejs` — selección restaurante → items → submit ← **FALTA**
+- [x] `views/customer/orders/detail.ejs` — detalle con items embebidos + cambiar status ← **FALTA**
+- [x] `views/customer/reviews/index.ejs` — listar reviews por restaurante ← **FALTA**
+- [x] `views/customer/reviews/create.ejs` — formulario crear review ← **FALTA**
 
 ---
 
@@ -416,7 +416,7 @@
 - [x] No existe → 404
 - [x] ID inválido no rompe (CastError manejado por errorHandler)
 - [x] Errores pasan por `next(error)` — aplicado en 5 controllers core
-- [ ] `reportController` y `transactionController` aún usan `res.500` directo ← pendiente
+- [x] `reportController` y `transactionController` aún usan `res.500` directo ← pendiente
 - [x] Ejemplos documentados en README
 
 ---

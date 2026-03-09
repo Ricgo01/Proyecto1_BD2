@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Nuevo Pedido</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script>
+    if (!localStorage.getItem('user')) window.location.href = '/login';
+  </script>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+
+  <div class="container py-4">
+    <h2 class="mb-4">Crear Nuevo Pedido</h2>
+
+    <div class="row">
+      <!-- Selección de Restaurante -->
+      <div class="col-md-12 mb-4">
+        <label class="form-label fw-bold">Elige un Restaurante</label>
+        <select id="restaurantSelect" class="form-select form-select-lg shadow-sm">
+          <option value="">Cargando restaurantes...</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- Menú Items -->
+      <div class="col-md-8">
+        <div class="card shadow-sm border-0 mb-4 mb-md-0">
+          <div class="card-header bg-dark text-white fw-bold">Platillos del Restaurante</div>
+          <div class="card-body" id="menuArea">
+            <p class="text-muted text-center py-4">Selecciona un restaurante arriba para ver el menú.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Carrito -->
+      <div class="col-md-4">
+        <div class="card shadow-sm border-primary">
+          <div class="card-header bg-primary text-white fw-bold border-0">Mi Carrito</div>
+          <div class="card-body p-0">
+            <ul id="cartItems" class="list-group list-group-flush">
+              <li class="list-group-item text-center text-muted border-0 py-4">El carrito está vacío.</li>
+            </ul>
+          </div>
+          <div class="card-footer bg-white text-end border-top-0 pt-3">
+            <h4 class="text-dark mb-3">Total: $<span id="cartTotal">0.00</span></h4>
+            <button id="btnSubmitOrder" class="btn btn-success w-100 fw-bold" disabled>Confirmar Pedido</button>
+          </div>
+        </div>
+        <div id="statusAlert" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let cart = []; // Array de { menuItemId, nameSnapshot, unitPriceSnapshot, qty, lineTotal }
+    let currentRestaurant = null;
+
+    // 1. Cargar restaurantes
+    async function loadRestaurants() {
+      try {
+        const res = await fetch('/api/restaurants?limit=50');
+        const data = await res.json();
+        const select = document.getElementById('restaurantSelect');
+        select.innerHTML = '<option value="">-- Selecciona un restaurante --</option>';
+        data.restaurants.forEach(r => {
+          select.innerHTML += `<option value="${r._id}">${r.name} ★${r.avgRating.toFixed(1)}</option>`;
+        });
+      } catch (err) {
+        console.error("Error al cargar restaurantes", err);
+      }
+    }
+
+    // 2. Cargar menú del restaurante seleccionado
+    document.getElementById('restaurantSelect').addEventListener('change', async (e) => {
+      currentRestaurant = e.target.value;
+      const menuArea = document.getElementById('menuArea');
+      
+      // Vaciar carrito
+      cart = [];
+      updateCartUI();
+      
+      if (!currentRestaurant) {
+        menuArea.innerHTML = '<p class="text-muted text-center py-4">Selecciona un restaurante arriba para ver el menú.</p>';
+        return;
+      }
+
+      menuArea.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-dark"></div></div>';
+
+      try {
+        const res = await fetch(`/api/menu-items?restaurantId=${currentRestaurant}`);
+        const data = await res.json();
+        
+        if (!data.menuItems || data.menuItems.length === 0) {
+          menuArea.innerHTML = '<p class="text-center py-4">Este restaurante no tiene platillos todavía.</p>';
+          return;
+        }
+
+        let html = '<div class="row g-3">';
+        data.menuItems.forEach(item => {
+          if (!item.isAvailable) return;
+          html += `
+            <div class="col-sm-6 col-md-4">
+              <div class="card h-100 border-0 shadow-sm bg-light">
+                ${item.photo ? `<img src="/api/images/${item.photo}" class="card-img-top" style="height: 150px; object-fit: cover;" alt="foto">` : ''}
+                <div class="card-body text-center p-3">
+                  <h6 class="card-title fw-bold mb-1">${item.name}</h6>
+                  <p class="text-primary fw-bold mb-2">$${item.price.toFixed(2)}</p>
+                  <button class="btn btn-sm btn-outline-dark" onclick="addToCart('${item._id}', '${item.name}', ${item.price})">Añadir</button>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        html += '</div>';
+        menuArea.innerHTML = html;
+      } catch (err) {
+        menuArea.innerHTML = '<p class="text-danger">Error al cargar el menú</p>';
+      }
+    });
+
+    // 3. Manejo del Carrito
+    window.addToCart = function(id, name, price) {
+      const existing = cart.find(x => x.menuItemId === id);
+      if (existing) {
+        existing.qty++;
+        existing.lineTotal = existing.qty * existing.unitPriceSnapshot;
+      } else {
+        cart.push({
+          menuItemId: id,
+          nameSnapshot: name,
+          unitPriceSnapshot: price,
+          qty: 1,
+          lineTotal: price
+        });
+      }
+      updateCartUI();
+    };
+
+    window.removeFromCart = function(index) {
+      cart.splice(index, 1);
+      updateCartUI();
+    };
+
+    function updateCartUI() {
+      const cartList = document.getElementById('cartItems');
+      const totalEl = document.getElementById('cartTotal');
+      const btnSubmit = document.getElementById('btnSubmitOrder');
+      
+      if (cart.length === 0) {
+        cartList.innerHTML = '<li class="list-group-item text-center text-muted border-0 py-4">El carrito está vacío.</li>';
+        totalEl.textContent = '0.00';
+        btnSubmit.disabled = true;
+        return;
+      }
+
+      let total = 0;
+      let html = '';
+      cart.forEach((item, index) => {
+        total += item.lineTotal;
+        html += `
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <span class="badge bg-secondary me-1">${item.qty}x</span>
+              <span class="small">${item.nameSnapshot}</span>
+            </div>
+            <div class="text-end">
+              <span class="small fw-bold text-dark me-2">$${item.lineTotal.toFixed(2)}</span>
+              <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removeFromCart(${index})" title="Quitar">×</button>
+            </div>
+          </li>
+        `;
+      });
+
+      cartList.innerHTML = html;
+      totalEl.textContent = total.toFixed(2);
+      btnSubmit.disabled = false;
+    }
+
+    // 4. Submit Order (Rubrica Create con Embebidos!)
+    document.getElementById('btnSubmitOrder').addEventListener('click', async () => {
+      const user = JSON.parse(localStorage.getItem('user'));
+      
+      const payload = {
+        restaurantId: currentRestaurant,
+        // Usaremos el User ID del localStorage si tu API recibe userId directo
+        // en este modelo. Como "Order" asocia al usuario o lo usa genérico,
+        // enviaremos el payload mínimo requerido
+        totalAmount: cart.reduce((acc, curr) => acc + curr.lineTotal, 0),
+        status: 'created',
+        items: cart
+      };
+
+      const btn = document.getElementById('btnSubmitOrder');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
+
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          document.getElementById('statusAlert').innerHTML = `
+            <div class="alert alert-success">¡Pedido creado! ID: <strong>Oculto por seguridad</strong> <br>Redirigiendo...</div>
+          `;
+          setTimeout(() => window.location.href = '/orders', 2000);
+        } else {
+          document.getElementById('statusAlert').innerHTML = `<div class="alert alert-danger">${data.error || 'Error'}</div>`;
+          btn.disabled = false;
+          btn.textContent = 'Confirmar Pedido';
+        }
+      } catch (err) {
+        document.getElementById('statusAlert').innerHTML = `<div class="alert alert-danger">Fallo de conexión</div>`;
+        btn.disabled = false;
+        btn.textContent = 'Confirmar Pedido';
+      }
+    });
+
+    // Boot
+    loadRestaurants();
+  </script>
+</body>
+</html>
