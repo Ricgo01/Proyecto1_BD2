@@ -262,11 +262,11 @@ exports.bulkUpdateAvailability = async (req, res, next) => {
  */
 exports.bulkUpdateTags = async (req, res, next) => {
   try {
-    const { action, tags, restaurantId } = req.body;
+    const { action, tags, itemIds } = req.body;
     
-    if (!action || !['add', 'remove'].includes(action) || !Array.isArray(tags) || !restaurantId) {
+    if (!action || !['add', 'remove'].includes(action) || !Array.isArray(tags) || !Array.isArray(itemIds) || !itemIds.length) {
       return res.status(400).json({ 
-        error: 'Campos requeridos: action (add|remove), tags (array), restaurantId' 
+        error: 'Campos requeridos: action (add|remove), tags (array), itemIds (array no vacío)' 
       });
     }
 
@@ -282,7 +282,7 @@ exports.bulkUpdateTags = async (req, res, next) => {
     }
 
     const result = await MenuItem.updateMany(
-      { restaurantId },
+      { _id: { $in: itemIds } },
       updateQuery
     );
 

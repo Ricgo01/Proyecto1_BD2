@@ -16,7 +16,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h2>Mi Menú <small class="text-muted fs-6">Solo tus restaurantes</small></h2>
       <div class="d-flex gap-2">
-        <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#bulk-tags-modal">&#9881; Editar Tags Masivamente</button>
+        <button class="btn btn-outline-info" onclick="openBulkTagsModal()">&#9881; Editar Tags Masivamente</button>
         <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulk-modal">&#8679; Carga Masiva JSON</button>
         <a href="/menu/create" class="btn btn-dark">+ Nuevo Item</a>
       </div>
@@ -63,7 +63,10 @@
       <div class="card-body p-0">
         <table class="table table-hover mb-0">
           <thead class="table-dark">
-            <tr><th>Nombre</th><th>Precio</th><th>Tags</th><th>Disponible</th><th>Acciones</th></tr>
+            <tr>
+              <th style="width: 40px;"><input type="checkbox" id="check-all" class="form-check-input" onchange="toggleAll(this.checked)"/></th>
+              <th>Nombre</th><th>Precio</th><th>Tags</th><th>Disponible</th><th>Acciones</th>
+            </tr>
           </thead>
           <tbody id="menu-tbody">
             <tr><td colspan="5" class="text-center py-4 text-muted">Usa los filtros para buscar</td></tr>
@@ -77,6 +80,28 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     let restTimer, nameTimer;
+    const selectedIds = new Set();
+
+    function updateCheckAll() {
+      const checks = document.querySelectorAll('.row-check');
+      const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+      const checkAllBtn = document.getElementById('check-all');
+      if (checkAllBtn) checkAllBtn.checked = allChecked;
+    }
+
+    function toggleAll(checked) {
+      document.querySelectorAll('.row-check').forEach(cb => {
+        cb.checked = checked;
+        if (checked) selectedIds.add(cb.value);
+        else selectedIds.delete(cb.value);
+      });
+    }
+
+    function toggleRow(id, checked) {
+      if (checked) selectedIds.add(id);
+      else selectedIds.delete(id);
+      updateCheckAll();
+    }
 
     // Load tags into dropdown
     async function loadTags() {
@@ -156,8 +181,11 @@
         renderPagination(0, 1); return;
       }
 
-      tbody.innerHTML = data.menuItems.map(m => `
-        <tr class="align-middle">
+      tbody.innerHTML = data.menuItems.map(m => {
+        const checked = selectedIds.has(m._id) ? 'checked' : '';
+        return `
+        <tr class="align-middle" id="row-${m._id}">
+          <td><input type="checkbox" class="form-check-input row-check" value="${m._id}" ${checked} onchange="toggleRow('${m._id}',this.checked)"/></td>
           <td>
             ${m.photo ? `<img src="/api/images/${m.photo}" alt="foto" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" class="me-2">` : ''}
             ${m.name}
@@ -174,7 +202,10 @@
             <a href="/menu/${m._id}/edit" class="btn btn-sm btn-outline-secondary">Editar</a>
             <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteMenuItem('${m._id}')" title="Eliminar platillo">🗑️</button>
           </td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
+
+      updateCheckAll();
 
       renderPagination(data.pagination.pages, page);
     }
@@ -422,12 +453,9 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">1. Restaurante objetivo</label>
-            <select id="bulk-tags-restaurantId" class="form-select">
-              <option value="">-- Selecciona un restaurante --</option>
-            </select>
-          </div>
+          <p class="text-muted small mb-3">
+            Se aplicará a <strong id="modal-sel-count">0</strong> platillo(s) seleccionado(s).
+          </p>
           <div class="mb-3">
             <label class="form-label fw-semibold">2. Acción</label>
             <select id="bulk-tags-action" class="form-select" onchange="toggleTagAction(this.value)">
@@ -452,20 +480,30 @@
   </div>
 
   <script>
+    function openBulkTagsModal() {
+      if (selectedIds.size === 0) {
+        alert('Por favor, selecciona al menos un platillo de la lista usando las casillas de verificación.');
+        return;
+      }
+      document.getElementById('modal-sel-count').textContent = selectedIds.size;
+      document.getElementById('bulk-tags-alert').classList.add('d-none');
+      const modal = new bootstrap.Modal(document.getElementById('bulk-tags-modal'));
+      modal.show();
+    }
+
     function toggleTagAction(action) {
       document.getElementById('bulk-tags-label').textContent = action === 'add' ? 'Tags a inyectar (simula $addToSet)' : 'Tags a extraer (simula $pull)';
     }
 
     async function executeBulkTags() {
-      const rid = document.getElementById('bulk-tags-restaurantId').value;
       const action = document.getElementById('bulk-tags-action').value;
       const rawTags = document.getElementById('bulk-tags-input').value;
       const alertEl = document.getElementById('bulk-tags-alert');
       const btn = document.getElementById('bulk-tags-btn');
 
-      if (!rid) {
+      if (selectedIds.size === 0) {
         alertEl.className = 'alert alert-danger mb-0';
-        alertEl.textContent = 'Selecciona un restaurante.';
+        alertEl.textContent = 'Selecciona al menos un platillo en la tabla principal.';
         alertEl.classList.remove('d-none');
         return;
       }
@@ -485,7 +523,7 @@
         const res = await fetch('/api/menu-items/bulk/tags', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ restaurantId: rid, action, tags })
+          body: JSON.stringify({ itemIds: Array.from(selectedIds), action, tags })
         });
         const data = await res.json();
         
@@ -497,6 +535,7 @@
             bootstrap.Modal.getInstance(document.getElementById('bulk-tags-modal')).hide();
             alertEl.classList.add('d-none');
             document.getElementById('bulk-tags-input').value = '';
+            selectedIds.clear();
             loadMenu(1); // recargar tabla
           }, 2000);
         } else {
@@ -513,19 +552,6 @@
       btn.disabled = false;
       btn.textContent = 'Ejecutar';
     }
-    
-    // Al cargar los restaurantes del dueño, popular el select de tags también
-    const originalLoadOwnerRestaurants = loadOwnerRestaurants;
-    loadOwnerRestaurants = async function() {
-      await originalLoadOwnerRestaurants();
-      const sel = document.getElementById('filter-restaurantId');
-      const tagsSel = document.getElementById('bulk-tags-restaurantId');
-      if (sel && tagsSel) {
-        Array.from(sel.options).forEach(opt => {
-          if (opt.value) tagsSel.appendChild(opt.cloneNode(true));
-        });
-      }
-    };
   </script>
 </body>
 </html>
