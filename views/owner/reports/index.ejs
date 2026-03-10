@@ -61,20 +61,6 @@
         </div>
       </div>
 
-      <!-- Análisis por estado -->
-      <div class="col-md-6">
-        <div class="card shadow-sm">
-          <div class="card-header fw-bold">Pedidos por Estado <code>$group → $sort</code></div>
-          <div class="card-body p-0">
-            <table class="table table-sm mb-0">
-              <thead class="table-secondary"><tr><th>Estado</th><th>Total</th></tr></thead>
-              <tbody id="order-status-tbody">
-                <tr><td colspan="2" class="text-center text-muted py-3">Cargando...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -107,7 +93,7 @@
           <tr>
             <td>${i+1}</td>
             <td>${d.dishName || d._id || '—'}</td>
-            <td>${d.totalSold ?? d.count ?? '—'}</td>
+            <td>${d.totalQuantitySold ?? '—'}</td>
             <td>Q${(d.totalRevenue ?? 0).toFixed(2)}</td>
           </tr>`).join('');
       } else {
@@ -123,7 +109,7 @@
           <tr>
             <td>${i+1}</td>
             <td>${c.userName || c.email || c._id || '—'}</td>
-            <td>${c.totalOrders ?? '—'}</td>
+            <td>${c.orderCount ?? '—'}</td>
             <td>Q${(c.totalSpent ?? 0).toFixed(2)}</td>
           </tr>`).join('');
       } else {
@@ -146,19 +132,6 @@
           </p>`;
       }
 
-      // Pedidos por estado
-      const statusRes  = await fetch('/api/reports/order-status-analysis');
-      const statusData = await statusRes.json();
-      const statusTbody = document.getElementById('order-status-tbody');
-      if (statusRes.ok) {
-        const list = statusData.analysis || statusData.data || statusData.orders || statusData.statuses || [];
-        if (list.length) {
-          statusTbody.innerHTML = list.map(s => `
-            <tr><td>${s._id || s.status}</td><td>${s.count ?? s.total ?? '—'}</td></tr>`).join('');
-        } else {
-          statusTbody.innerHTML = '<tr><td colspan="2" class="text-muted text-center">Sin datos</td></tr>';
-        }
-      }
     }
 
     loadAll();
