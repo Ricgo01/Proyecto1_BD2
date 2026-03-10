@@ -161,6 +161,8 @@
             <div class="col-md-4 text-md-end">
               <div class="fs-3 fw-bold text-warning">${r.avgRating?.toFixed(1) ?? '—'}</div>
               <div class="text-muted small">${r.ratingCount ?? 0} reseñas</div>
+              <div class="text-muted small mt-1"><strong>${r.orderCount ?? 0}</strong> pedidos históricos</div>
+              <div class="text-muted small"><strong>${r.activeItemsCount ?? 0}</strong> items activos</div>
             </div>
           </div>
         </div>`;

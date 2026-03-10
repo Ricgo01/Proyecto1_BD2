@@ -13,7 +13,7 @@
   <%- include('../../partials/navbar') %>
   <div class="container py-4">
     <h2 class="mb-1">Restaurantes Cercanos</h2>
-    <p class="text-muted mb-4 small">Búsqueda geoespacial usando índice <code>2dsphere</code> — <code>$near / $geoNear</code></p>
+    <p class="text-muted mb-4 small">Encuentra los restaurantes más cerca de ti en tiempo real.</p>
 
     <!-- Controles de búsqueda -->
     <div class="card shadow-sm mb-4">
@@ -106,7 +106,7 @@
 
         const header = document.getElementById('results-header');
         header.className = 'mb-2 text-muted small';
-        header.textContent = `${list.length} restaurante(s) encontrado(s) en un radio de ${(maxDistance/1000).toFixed(1)} km • Índice 2dsphere activo`;
+        header.textContent = `${list.length} restaurante(s) encontrado(s) en un radio de ${(maxDistance/1000).toFixed(1)} km`;
 
         if (!list.length) {
           resultsEl.innerHTML = `

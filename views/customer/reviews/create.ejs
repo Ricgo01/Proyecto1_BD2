@@ -28,22 +28,13 @@
             
             <form id="reviewForm">
               
-              <!-- Selección de Restaurante -->
-              <div class="mb-4">
-                <label class="form-label text-muted fw-bold">Restaurante Visitado</label>
-                <select id="restaurantId" class="form-select" required>
-                  <option value="">Cargando catálogo...</option>
-                </select>
-                <div class="form-text">Solo aplicable a restaurantes donde hayas pedido.</div>
-              </div>
-
               <!-- Selector de Orden Dinámica -->
               <div class="mb-4">
                 <label class="form-label text-muted fw-bold">ID del Pedido</label>
-                <select id="orderId" class="form-select" disabled>
-                  <option value="">Selecciona un restaurante primero...</option>
+                <select id="orderId" class="form-select" required>
+                  <option value="">Cargando tus pedidos recientes...</option>
                 </select>
-                <div class="form-text">Te mostraremos únicamente los pedidos que hayas hecho en este restaurante.</div>
+                <div class="form-text">Solo puedes reseñar pedidos que ya fueron entregados.</div>
               </div>
 
               <!-- Estrellas Dinámicas -->
@@ -85,68 +76,39 @@
   <script>
     const user = JSON.parse(localStorage.getItem('user'));
 
-    // Cargar Restaurantes para el select inicial
-    async function loadRestaurants() {
+    // Cargar Historial de Órdenes Entregadas del Usuario
+    async function loadOrders() {
       try {
-        const res = await fetch('/api/restaurants');
-        const data = await res.json();
-        const select = document.getElementById('restaurantId');
+        const orderSelect = document.getElementById('orderId');
         
-        select.innerHTML = '<option value="">-- Elige un restaurante --</option>';
-        data.restaurants.forEach(r => {
-          select.innerHTML += `<option value="${r._id}">${r.name}</option>`;
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    loadRestaurants();
-
-    // Evento dinámico: Cuando seleccionan un restaurante, cargar SUS órdenes históricas ahí
-    document.getElementById('restaurantId').addEventListener('change', async function() {
-      const restId = this.value;
-      const orderSelect = document.getElementById('orderId');
-      
-      if (!restId) {
-        orderSelect.innerHTML = '<option value="">Selecciona un restaurante primero...</option>';
-        orderSelect.disabled = true;
-        return;
-      }
-
-      orderSelect.innerHTML = '<option value="">Cargando historiales...</option>';
-      orderSelect.disabled = true;
-
-      try {
-        // Aprovechando el endpoint completo de Mongoose: pasamos userId y restaurantId cruzados
-        const res = await fetch(`/api/orders?userId=${user.id}&restaurantId=${restId}&limit=50`);
+        // Buscamos todas las ordenes del usuario que esten en 'delivered'
+        const res = await fetch(`/api/orders?userId=${user.id}&status=delivered&limit=50`);
         const data = await res.json();
 
         if (data.orders && data.orders.length > 0) {
           orderSelect.innerHTML = '<option value="">-- Elige la orden que quieres evaluar --</option>';
           data.orders.forEach(o => {
-            // Extraer nombres de platos en un array plano
             const productNames = o.items.map(item => item.nameSnapshot).join(', ');
-            
-            // Mostrar fecha corta, status y platos
             const dateStr = new Date(o.createdAt).toLocaleDateString();
             
-            // Creamos las opciones del dropdown
+            // Guardamos el restaurantId en un atributo de datos para enviarlo luego
             orderSelect.innerHTML += `
-              <option value="${o._id}">
-                ${dateStr} - $${o.totalAmount} (${o.status.toUpperCase()}) | Items: ${productNames}
+              <option value="${o._id}" data-restid="${o.restaurantId._id || o.restaurantId}">
+                ${dateStr} | ${o.restaurantId.name || 'Restaurante'} | $${o.totalAmount} | Items: ${productNames}
               </option>
             `;
           });
           orderSelect.disabled = false;
         } else {
-          orderSelect.innerHTML = '<option value="">Aún no has hecho pedidos en este lugar</option>';
+          orderSelect.innerHTML = '<option value="">Aún no tienes pedidos entregados para calificar</option>';
           orderSelect.disabled = true;
         }
       } catch (err) {
         console.error(err);
-        orderSelect.innerHTML = '<option value="">Error obteniendo pedidos libres</option>';
+        document.getElementById('orderId').innerHTML = '<option value="">Error obteniendo pedidos libres</option>';
       }
-    });
+    }
+    loadOrders();
 
     // Enviar formulario (Transacción 1 en Backend!)
     document.getElementById('reviewForm').addEventListener('submit', async (e) => {
@@ -168,19 +130,28 @@
         return;
       }
 
+      // Extraer el option seleccionado para sacar el restaurante
+      const orderSelect = document.getElementById('orderId');
+      const selectedOption = orderSelect.options[orderSelect.selectedIndex];
+      const restId = selectedOption ? selectedOption.getAttribute('data-restid') : null;
+
+      if (!restId) {
+        alert.innerHTML = `<div class="alert alert-warning">Por favor elige un pedido válido.</div>`;
+        btn.disabled = false;
+        btn.innerHTML = 'Publicar Reseña';
+        return;
+      }
+
       const payload = {
-        restaurantId: document.getElementById('restaurantId').value,
+        restaurantId: restId,
         userId: user.id, // Referencia del creador de la reseña
-        orderId: document.getElementById('orderId').value || null, // Algunos backends fallan si pasas "" a un ObjectId
+        orderId: orderSelect.value, 
         rating: parseInt(ratingInput.value),
         comment: document.getElementById('comment').value
       };
 
-      // Remover orderId si viene vacío para evitar Error de Cast de ObjectId
-      if (!payload.orderId) delete payload.orderId;
-
       try {
-        const res = await fetch('/api/reviews', {
+        const res = await fetch('/api/transactions/review-with-rating', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -189,7 +160,7 @@
         const data = await res.json();
         
         if (res.ok) {
-          alert.innerHTML = `<div class="alert alert-success">¡Reseña publicada! Se recalculó el promedio del local. (Transacción Ejecutada)</div>`;
+          alert.innerHTML = `<div class="alert alert-success">¡Reseña publicada! Se recalculó el promedio del local.</div>`;
           setTimeout(() => window.location.href = '/reviews', 2500);
         } else {
           alert.innerHTML = `<div class="alert alert-danger">${data.error || 'No cumple reglas para publicar la reseña'}</div>`;

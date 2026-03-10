@@ -94,8 +94,21 @@ exports.getAllRestaurants = async (req, res, next) => {
       Restaurant.countDocuments(filter)
     ]);
 
+    // Agregaciones simples (Rúbrica)
+    const Order = require('../models/Order');
+    const MenuItem = require('../models/MenuItem');
+
+    const populatedRestaurants = await Promise.all(restaurants.map(async (r) => {
+      const restIdOid = new mongoose.Types.ObjectId(r._id);
+      const [orderCount, activeItemsCount] = await Promise.all([
+        Order.countDocuments({ restaurantId: restIdOid }),
+        MenuItem.countDocuments({ restaurantId: restIdOid, isAvailable: true })
+      ]);
+      return { ...r, orderCount, activeItemsCount };
+    }));
+
     res.json({
-      restaurants,
+      restaurants: populatedRestaurants,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -114,11 +127,25 @@ exports.getAllRestaurants = async (req, res, next) => {
 exports.getRestaurantById = async (req, res, next) => {
   try {
     const restaurant = await Restaurant.findById(req.params.id)
-      .populate('owner_id', 'name email');
+      .populate('owner_id', 'name email')
+      .lean();
     
     if (!restaurant) {
       return res.status(404).json({ error: 'Restaurante no encontrado' });
     }
+    
+    // Agregaciones simples
+    const Order = require('../models/Order');
+    const MenuItem = require('../models/MenuItem');
+    
+    const restIdOid = new mongoose.Types.ObjectId(restaurant._id);
+    const [orderCount, activeItemsCount] = await Promise.all([
+      Order.countDocuments({ restaurantId: restIdOid }),
+      MenuItem.countDocuments({ restaurantId: restIdOid, isAvailable: true })
+    ]);
+    
+    restaurant.orderCount = orderCount;
+    restaurant.activeItemsCount = activeItemsCount;
     
     res.json({ restaurant });
   } catch (error) {

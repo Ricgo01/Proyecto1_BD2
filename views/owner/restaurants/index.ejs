@@ -47,10 +47,10 @@
       <div class="card-body p-0">
         <table class="table table-hover mb-0">
           <thead class="table-dark">
-            <tr><th>Nombre</th><th>Categorias</th><th>Rating</th><th>Direccion</th><th></th></tr>
+            <tr><th>Nombre</th><th>Categorias</th><th>KPIs</th><th>Rating</th><th>Direccion</th><th></th></tr>
           </thead>
           <tbody id="restaurants-tbody">
-            <tr><td colspan="5" class="text-center py-4 text-muted">Cargando...</td></tr>
+            <tr><td colspan="6" class="text-center py-4 text-muted">Cargando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -112,6 +112,10 @@
             <strong>${r.name}</strong>
           </td>
           <td>${(r.categories || []).join(', ') || '—'}</td>
+          <td>
+            <div class="small text-nowrap"><span class="badge bg-primary">${r.orderCount || 0}</span> Pedidos</div>
+            <div class="small text-nowrap mt-1"><span class="badge bg-success">${r.activeItemsCount || 0}</span> Menú Activo</div>
+          </td>
           <td><span class="badge bg-warning text-dark">${r.avgRating?.toFixed(1) ?? '—'}</span></td>
           <td class="text-muted small">${r.address}</td>
           <td class="text-end" style="white-space:nowrap">

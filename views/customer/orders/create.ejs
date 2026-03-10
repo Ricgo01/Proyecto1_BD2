@@ -96,6 +96,19 @@
           <div id="statusAlert" class="mt-3"></div>
         </div>
       </div>
+      <div class="row mt-4">
+        <!-- Reseñas del Restaurante -->
+        <div class="col-12">
+          <div class="card shadow-sm border-0">
+            <div class="card-header bg-warning text-dark fw-bold d-flex align-items-center">
+              <span>Reseñas de este Restaurante</span>
+            </div>
+            <div class="card-body" id="reviewsArea">
+              <p class="text-muted text-center py-3">Selecciona un restaurante para ver sus reseñas.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -189,6 +202,7 @@
       document.getElementById('order-section').classList.remove('d-none');
       document.getElementById('order-section').scrollIntoView({ behavior: 'smooth' });
       renderMenu();
+      renderReviews(id); // <--- Llama a las reseñas
     };
 
     window.clearRestaurant = function() {
@@ -244,6 +258,44 @@
       const q = document.getElementById('menuSearch').value.trim();
       menuSearchTimer = setTimeout(() => renderMenu(q), 300);
     };
+
+    // ── Reseñas (Índice Simple) ──────────────────────────────────────────────
+    async function renderReviews(restId) {
+      const reviewsArea = document.getElementById('reviewsArea');
+      reviewsArea.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
+
+      try {
+        // Esta llamada detona el Índice Simple { restaurantId: 1 } en el Backend
+        const res = await fetch(`/api/reviews?restaurantId=${restId}&limit=5`);
+        const data = await res.json();
+        
+        if (!data.reviews || data.reviews.length === 0) {
+          reviewsArea.innerHTML = '<p class="text-muted text-center py-3">Este restaurante aún no tiene reseñas.</p>';
+          return;
+        }
+
+        let html = '<div class="list-group">';
+        data.reviews.forEach(rev => {
+          const stars = '★'.repeat(rev.rating) + '☆'.repeat(5 - rev.rating);
+          const dateStr = new Date(rev.createdAt).toLocaleDateString();
+          html += `
+            <div class="list-group-item list-group-item-action">
+              <div class="d-flex w-100 justify-content-between">
+                <h6 class="mb-1 text-warning text-shadow-sm">${stars}</h6>
+                <small class="text-muted">${dateStr}</small>
+              </div>
+              <p class="mb-1 small">${rev.comment || '<i>Sin comentario</i>'}</p>
+              <small class="text-muted text-capitalize">- ${rev.userId?.name || 'Usuario Anónimo'}</small>
+            </div>
+          `;
+        });
+        html += '</div>';
+        reviewsArea.innerHTML = html;
+
+      } catch (err) {
+        reviewsArea.innerHTML = '<p class="text-danger">Error al cargar las reseñas</p>';
+      }
+    }
 
     // ── Carrito ──────────────────────────────────────────────────────────────
     // 3. Manejo del Carrito
@@ -304,7 +356,7 @@
       btnSubmit.disabled = false;
     }
 
-    // 4. Submit Order (Rubrica Create con Embebidos!)
+    // 4. Submit Order
     document.getElementById('btnSubmitOrder').addEventListener('click', async () => {
       const user = JSON.parse(localStorage.getItem('user'));
       

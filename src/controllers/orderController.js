@@ -237,18 +237,28 @@ exports.addItemToOrder = async (req, res, next) => {
       lineTotal: parseFloat(lineTotal.toFixed(2))
     };
 
-    // Agregar item y recalcular total
+    // Agregar item (en memoria temporal para recalcular totalAmount)
     order.items.push(newItem);
-    order.totalAmount = parseFloat(
+    const newTotalAmount = parseFloat(
       order.items.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2)
     );
-    order.updatedAt = Date.now();
-    
-    await order.save();
+
+    // Guardar usando el operador nativo $push de MongoDB
+    const updatedOrder = await Order.findByIdAndUpdate(
+      req.params.id,
+      { 
+        $push: { items: newItem },
+        $set: { 
+          totalAmount: newTotalAmount,
+          updatedAt: Date.now()
+        }
+      },
+      { new: true } // devuelve el documento actualizado
+    );
     
     res.json({ 
       message: 'Item agregado al pedido exitosamente', 
-      order 
+      order: updatedOrder 
     });
   } catch (error) {
     next(error);
@@ -277,22 +287,32 @@ exports.removeItemFromOrder = async (req, res, next) => {
       });
     }
 
-    // Remover el item
-    order.items = order.items.filter(
+    // Remover el item en memoria para recalcular totalAmount
+    const updatedItems = order.items.filter(
       item => item.menuItemId.toString() !== menuItemId
     );
 
     // Recalcular total
-    order.totalAmount = parseFloat(
-      order.items.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2)
+    const newTotalAmount = parseFloat(
+      updatedItems.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2)
     );
-    order.updatedAt = Date.now();
-    
-    await order.save();
+
+    // Guardar usando el operador nativo $pull de MongoDB
+    const updatedOrder = await Order.findByIdAndUpdate(
+      req.params.id,
+      {
+        $pull: { items: { menuItemId: menuItemId } },
+        $set: {
+          totalAmount: newTotalAmount,
+          updatedAt: Date.now()
+        }
+      },
+      { new: true }
+    );
     
     res.json({ 
       message: 'Item removido del pedido exitosamente', 
-      order 
+      order: updatedOrder
     });
   } catch (error) {
     next(error);

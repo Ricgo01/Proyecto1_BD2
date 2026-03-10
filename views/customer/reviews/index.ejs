@@ -32,8 +32,8 @@
       try {
         // En tu backend actual /api/reviews trae todas o puedes filtrar si añadiste la query
         // Para asegurar que sirvan en la demo, mostraremos las últimas con un fetch general.
-        // Lo ideal: /api/reviews?userId=${user.id}
-        const res = await fetch(`/api/reviews?limit=20&sortBy=createdAt&order=desc`);
+        // Filtramos por el ID del usuario logueado
+        const res = await fetch(`/api/reviews?userId=${user.id}&limit=20&sortBy=createdAt&order=desc`);
         const data = await res.json();
         
         document.getElementById('loader').style.display = 'none';
@@ -56,7 +56,7 @@
                     <span class="fs-4 ${color}">${stars}</span>
                     <div class="text-end">
                       <small class="text-muted d-block">${new Date(r.createdAt).toLocaleDateString()}</small>
-                      <button class="btn btn-sm btn-outline-danger mt-1 py-0 px-2" onclick="deleteReview('${r._id}')">Borrar (DeleteOne)</button>
+                      <button class="btn btn-sm btn-outline-danger mt-1 py-0 px-2" onclick="deleteReview('${r._id}')">Borrar</button>
                     </div>
                   </div>
                   <p class="card-text">"${r.comment || 'Sin comentario'}"</p>
@@ -77,7 +77,7 @@
     }
 
     async function deleteReview(reviewId) {
-      if(!confirm('¿Estás seguro de que quieres borrar esta reseña de forma permanente? (DeleteOne)')) return;
+      if(!confirm('¿Estás seguro de que quieres borrar esta reseña de forma permanente?')) return;
       try {
         const res = await fetch(`/api/reviews/${reviewId}`, { method: 'DELETE' });
         if(res.ok) window.location.reload();

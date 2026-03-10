@@ -107,7 +107,7 @@
 
         document.getElementById('orderIdLabel').textContent = o._id;
         document.getElementById('orderDate').textContent = new Date(o.createdAt).toLocaleString('es-ES');
-        document.getElementById('restaurantIdLbl').textContent = o.restaurantId;
+        document.getElementById('restaurantIdLbl').textContent = o.restaurantId.name || o.restaurantId;
         document.getElementById('orderTotal').textContent = `$${parseFloat(o.totalAmount).toFixed(2)}`;
 
         // Badge Status y Botón de Cancelar
@@ -117,7 +117,7 @@
         b.textContent = st.toUpperCase();
         if (st === 'created') {
           b.className = 'badge bg-secondary';
-          cancelBtnHtml = `<button class="btn btn-sm btn-outline-danger mt-2 w-100 fw-bold" onclick="cancelOrder('${o._id}')">Cancelar Pedido Abierto (Transacción 2)</button>`;
+          cancelBtnHtml = `<button class="btn btn-sm btn-outline-danger mt-2 w-100 fw-bold" onclick="cancelOrder('${o._id}')">Cancelar Pedido</button>`;
         }
         else if (st === 'confirmed') b.className = 'badge bg-info';
         else if (st === 'preparing') b.className = 'badge bg-warning text-dark';
@@ -135,26 +135,31 @@
               <td class="fw-bold">${item.nameSnapshot}</td>
               <td class="text-end text-muted">$${parseFloat(item.unitPriceSnapshot).toFixed(2)}</td>
               <td class="text-end fw-bold text-dark">$${parseFloat(item.lineTotal).toFixed(2)}</td>
-              ${o.status === 'created' ? `<td><button class="btn btn-sm btn-danger py-0 px-2" onclick="removeItem('${o._id}', '${item.menuItemId}')" title="$pull">-</button></td>` : '<td></td>'}
+              ${o.status === 'created' ? `<td><button class="btn btn-sm btn-danger py-0 px-2" onclick="removeItem('${o._id}', '${item.menuItemId}')" title="Quitar item">-</button></td>` : '<td></td>'}
             </tr>
           `;
         });
 
         // Bloque dinámico de Add To Order ($push)
         if (o.status === 'created') {
-          const menuRes = await fetch(`/api/menu-items?restaurantId=${o.restaurantId}`);
+          // Asegurarnos de sacar el ID real del restaurante que viene poblado
+          const restId = typeof o.restaurantId === 'object' ? o.restaurantId._id : o.restaurantId;
+          const menuRes = await fetch(`/api/menu-items?restaurantId=${restId}`);
           const menuData = await menuRes.json();
           let options = `<option value="">Selecciona platillo extra...</option>`;
           if (menuData.menuItems) {
             menuData.menuItems.forEach(mi => {
-              options += `<option value="${mi._id}">${mi.name} - $${mi.price}</option>`;
+              // Solo mostrar items disponibles
+              if(mi.isAvailable) {
+                options += `<option value="${mi._id}">${mi.name} - $${mi.price}</option>`;
+              }
             });
           }
           const addHtml = `
             <tr class="table-light">
               <td><input type="number" id="addQty" class="form-control form-control-sm" value="1" min="1"></td>
               <td colspan="2"><select id="addMenuItem" class="form-select form-select-sm">${options}</select></td>
-              <td colspan="2" class="text-end"><button class="btn btn-sm btn-primary" onclick="addItem('${o._id}')">Añadir ($push)</button></td>
+              <td colspan="2" class="text-end"><button class="btn btn-sm btn-primary" onclick="addItem('${o._id}')">Añadir</button></td>
             </tr>
           `;
           tbody.innerHTML += addHtml;
@@ -170,7 +175,7 @@
 
     // POST Transacción 2 (Cancelar Pedido con AuditLog)
     async function cancelOrder(orderId) {
-      if(!confirm('¿Estás seguro de cancelar este pedido abierto (Transaction 2)?')) return;
+      if(!confirm('¿Estás seguro de cancelar este pedido abierto?')) return;
       
       const user = JSON.parse(localStorage.getItem('user')) || {};
       
@@ -184,7 +189,7 @@
 
     // DELETE 1 Array Element ($pull)
     async function removeItem(orderId, menuItemId) {
-      if(!confirm('¿Quitar este platillo del carrito? ($pull)')) return;
+      if(!confirm('¿Quitar este platillo del carrito?')) return;
       const res = await fetch(`/api/orders/${orderId}/items`, {
         method: 'DELETE', headers: { 'Content-Type':'application/json' },
         body: JSON.stringify({ menuItemId })
