@@ -255,3 +255,42 @@ exports.bulkUpdateAvailability = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * UPDATE - Actualizar tags masivamente (para un restaurante)
+ * Soporta $addToSet (agregar tags a todos los items) y $pull (quitar tags)
+ */
+exports.bulkUpdateTags = async (req, res, next) => {
+  try {
+    const { action, tags, restaurantId } = req.body;
+    
+    if (!action || !['add', 'remove'].includes(action) || !Array.isArray(tags) || !restaurantId) {
+      return res.status(400).json({ 
+        error: 'Campos requeridos: action (add|remove), tags (array), restaurantId' 
+      });
+    }
+
+    if (tags.length === 0) {
+      return res.status(400).json({ error: 'La lista de tags no puede estar vacía' });
+    }
+
+    let updateQuery = {};
+    if (action === 'add') {
+      updateQuery = { $addToSet: { tags: { $each: tags } } };
+    } else {
+      updateQuery = { $pull: { tags: { $in: tags } } };
+    }
+
+    const result = await MenuItem.updateMany(
+      { restaurantId },
+      updateQuery
+    );
+
+    res.json({ 
+      message: `Tags ${action === 'add' ? 'agregados' : 'removidos'} masivamente con éxito`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};

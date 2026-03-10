@@ -17,6 +17,7 @@ router.get('/:id', menuItemController.getMenuItemById);
 // UPDATE
 router.put('/:id', menuItemController.updateMenuItem);
 router.patch('/bulk/availability', menuItemController.bulkUpdateAvailability);
+router.patch('/bulk/tags', menuItemController.bulkUpdateTags);
 
 // DELETE
 router.delete('/:id', menuItemController.deleteMenuItem);

@@ -15,23 +15,7 @@
       <div class="card-body text-center text-muted py-5">Cargando...</div>
     </div>
 
-    <!-- Menú del restaurante -->
-    <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
-      <h4>Menú</h4>
-      <a href="/menu/create" class="btn btn-sm btn-dark" id="btn-add-item">+ Item</a>
-    </div>
-    <div class="card shadow-sm mb-4">
-      <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-          <thead class="table-secondary">
-            <tr><th>Nombre</th><th>Precio</th><th>Tags</th><th>Disponible</th><th></th></tr>
-          </thead>
-          <tbody id="menu-tbody">
-            <tr><td colspan="5" class="text-center py-3 text-muted">Cargando...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+
 
     <div class="row">
       <!-- Pedidos del restaurante -->
@@ -166,35 +150,9 @@
             </div>
           </div>
         </div>`;
-      document.getElementById('btn-add-item').href = `/menu/create?restaurantId=${restaurantId}`;
     }
 
-    async function loadMenu() {
-      const res  = await fetch(`/api/menu-items?restaurantId=${restaurantId}&limit=50`);
-      const data = await res.json();
-      const tbody = document.getElementById('menu-tbody');
-      if (!data.menuItems?.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin items</td></tr>';
-        return;
-      }
-      tbody.innerHTML = data.menuItems.map(m => `
-        <tr class="align-middle">
-          <td>
-            ${m.photo ? `<img src="/api/images/${m.photo}" alt="foto" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" class="me-2">` : ''}
-            ${m.name}
-          </td>
-          <td>Q${m.price?.toFixed(2)}</td>
-          <td>${(m.tags||[]).map(t=>`<span class="badge bg-info text-dark me-1">${t}</span>`).join('') || '—'}</td>
-          <td>
-            <span class="badge ${m.isAvailable ? 'bg-success' : 'bg-danger'}">
-              ${m.isAvailable ? 'Disponible' : 'No disponible'}
-            </span>
-          </td>
-          <td>
-            <a href="/menu/${m._id}/edit" class="btn btn-sm btn-outline-secondary">Editar</a>
-          </td>
-        </tr>`).join('');
-    }
+
 
     async function addCategory(restId) {
       const cat = document.getElementById('newCategory').value.trim();
@@ -332,7 +290,6 @@
     };
 
     loadRestaurant();
-    loadMenu();
     loadReviews();
     loadOrders();
     loadChart();

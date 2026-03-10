@@ -20,7 +20,7 @@
     <p class="text-muted mb-4">Sistema de gestión de restaurantes — BD2 2026</p>
 
     <!-- Stats cards -->
-    <div class="row g-3 mb-5" id="stats">
+    <div class="row g-3 mb-5" id="stats" style="display: none;">
       <div class="col-6 col-md-4 col-lg-2">
         <div class="card text-center shadow-sm">
           <div class="card-body">
@@ -69,14 +69,8 @@
         <div class="card shadow-sm h-100 border-danger">
           <div class="card-header bg-danger text-white fw-bold">Admin — Control Total</div>
           <div class="card-body">
-            <div class="row g-2">
-              <div class="col-md-3"><a href="/admin/restaurants" class="btn btn-outline-danger w-100 text-start">Todos los Restaurantes</a></div>
-              <div class="col-md-3"><a href="/admin/reports" class="btn btn-outline-danger w-100 text-start">Reportes y Agregaciones</a></div>
-              <div class="col-md-3"><a href="/menu" class="btn btn-outline-secondary w-100 text-start">Menú (todos)</a></div>
-              <div class="col-md-3"><a href="/orders/create" class="btn btn-outline-primary w-100 text-start">Crear Pedido</a></div>
-              <div class="col-md-3"><a href="/restaurants/nearby" class="btn btn-outline-info w-100 text-start">📍 Restaurantes Cercanos</a></div>
-              <div class="col-md-3"><a href="/restaurants/create" class="btn btn-outline-secondary w-100 text-start">Crear Restaurante</a></div>
-            </div>
+              <div class="col-md-6"><a href="/admin/restaurants" class="btn btn-outline-danger w-100 text-start">Todos los Restaurantes</a></div>
+              <div class="col-md-6"><a href="/admin/reports" class="btn btn-outline-danger w-100 text-start">Reportes y Agregaciones</a></div>
           </div>
         </div>
       </div>
@@ -141,26 +135,26 @@
         roleContainer.prepend(ctaDiv);
       } 
       else if (storedUser.role === 'admin') {
+        document.getElementById('stats').style.display = 'flex';
         document.getElementById('adminCard').style.display = 'block';
-        document.getElementById('customerCard').style.display = 'block';
+
+        fetch('/api/reports/stats')
+          .then(r => r.json())
+          .then(data => {
+            const s = data.stats;
+            document.getElementById('stat-restaurants').textContent = s.totalRestaurants?.toLocaleString() ?? '—';
+            document.getElementById('stat-orders').textContent      = s.totalOrders?.toLocaleString() ?? '—';
+            document.getElementById('stat-reviews').textContent     = s.totalReviews?.toLocaleString() ?? '—';
+            document.getElementById('stat-menuitems').textContent   = s.totalMenuItems?.toLocaleString() ?? '—';
+            document.getElementById('stat-users').textContent       = s.totalUsers?.toLocaleString() ?? '—';
+          })
+          .catch(() => {});
       }
       else if (storedUser.role === 'owner') {
         document.getElementById('ownerCard').style.display = 'block';
         document.getElementById('customerCard').style.display = 'block';
       }
     }
-
-    fetch('/api/reports/stats')
-      .then(r => r.json())
-      .then(data => {
-        const s = data.stats;
-        document.getElementById('stat-restaurants').textContent = s.totalRestaurants?.toLocaleString() ?? '—';
-        document.getElementById('stat-orders').textContent      = s.totalOrders?.toLocaleString() ?? '—';
-        document.getElementById('stat-reviews').textContent     = s.totalReviews?.toLocaleString() ?? '—';
-        document.getElementById('stat-menuitems').textContent   = s.totalMenuItems?.toLocaleString() ?? '—';
-        document.getElementById('stat-users').textContent       = s.totalUsers?.toLocaleString() ?? '—';
-      })
-      .catch(() => {});
 
     // --- Seleccion de tu restaurante ---
     async function loadOwnerRestaurantsForBulk() {

@@ -251,7 +251,7 @@ exports.getNearbyRestaurants = async (req, res, next) => {
       });
     }
 
-    const restaurants = await Restaurant.find({
+    const filter = {
       location: {
         $near: {
           $geometry: {
@@ -261,7 +261,13 @@ exports.getNearbyRestaurants = async (req, res, next) => {
           $maxDistance: parseInt(maxDistance)
         }
       }
-    })
+    };
+    
+    if (req.query.category) filter.categories = { $regex: req.query.category, $options: 'i' };
+    if (req.query.minRating) filter.avgRating = { $gte: parseFloat(req.query.minRating) };
+    if (req.query.q) filter.name = { $regex: req.query.q, $options: 'i' };
+
+    const restaurants = await Restaurant.find(filter)
       .limit(parseInt(limit))
       .lean();
 
@@ -269,6 +275,7 @@ exports.getNearbyRestaurants = async (req, res, next) => {
       center: { lng: parseFloat(lng), lat: parseFloat(lat) },
       maxDistance: parseInt(maxDistance),
       count: restaurants.length,
+      pagination: { pages: 1 },
       restaurants 
     });
   } catch (error) {

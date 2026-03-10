@@ -53,6 +53,20 @@
             <button class="btn btn-primary w-100" onclick="loadRestaurants(1)">Buscar</button>
           </div>
         </div>
+        <div class="row g-2 mt-2">
+          <div class="col-md-3">
+            <input type="number" id="filter-lat" class="form-control" placeholder="Latitud (ej. 14.6)" step="any"/>
+          </div>
+          <div class="col-md-3">
+            <input type="number" id="filter-lng" class="form-control" placeholder="Longitud (ej. -90.5)" step="any"/>
+          </div>
+          <div class="col-md-3">
+            <input type="number" id="filter-dist" class="form-control" placeholder="Max Distancia (m)" value="5000"/>
+          </div>
+          <div class="col-md-3 d-flex align-items-center">
+            <small class="text-muted">&#128205; Búsqueda Cercana (Geoespacial)</small>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -117,6 +131,9 @@
       const category = document.getElementById('filter-category').value;
       const rating   = document.getElementById('filter-rating').value.trim();
       const sort     = document.getElementById('filter-sort').value;
+      const lat      = document.getElementById('filter-lat').value.trim();
+      const lng      = document.getElementById('filter-lng').value.trim();
+      const dist     = document.getElementById('filter-dist').value.trim();
 
       // Admin: NO owner_id filter → sees all
       const params = new URLSearchParams({ page, limit: 15, sortBy: sort });
@@ -124,7 +141,15 @@
       if (category) params.set('category', category);
       if (rating)   params.set('minRating', rating);
 
-      const res  = await fetch(`/api/restaurants?${params}`);
+      let url = `/api/restaurants?${params}`;
+      if (lat && lng) {
+        params.set('lat', lat);
+        params.set('lng', lng);
+        if (dist) params.set('maxDistance', dist);
+        url = `/api/restaurants/nearby?${params}`;
+      }
+
+      const res  = await fetch(url);
       const data = await res.json();
       const tbody = document.getElementById('restaurants-tbody');
 

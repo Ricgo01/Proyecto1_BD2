@@ -16,6 +16,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h2>Mi Menú <small class="text-muted fs-6">Solo tus restaurantes</small></h2>
       <div class="d-flex gap-2">
+        <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#bulk-tags-modal">&#9881; Editar Tags Masivamente</button>
         <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulk-modal">&#8679; Carga Masiva JSON</button>
         <a href="/menu/create" class="btn btn-dark">+ Nuevo Item</a>
       </div>
@@ -408,6 +409,123 @@
       document.getElementById('bulk-json').value = '';
     }
     document.getElementById('bulk-modal').addEventListener('hidden.bs.modal', resetBulkModal);
+  </script>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- Modal: Editar Tags Masivamente                       -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="modal fade" id="bulk-tags-modal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">&#9881; Actualizar Tags Masivamente (UpdateMany + $addToSet / $pull)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">1. Restaurante objetivo</label>
+            <select id="bulk-tags-restaurantId" class="form-select">
+              <option value="">-- Selecciona un restaurante --</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">2. Acción</label>
+            <select id="bulk-tags-action" class="form-select" onchange="toggleTagAction(this.value)">
+              <option value="add">Agregar Tags (UpdateMany + $addToSet)</option>
+              <option value="remove">Remover Tags (UpdateMany + $pull)</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label id="bulk-tags-label" class="form-label fw-semibold">Tags a inyectar (separados por coma)</label>
+            <input type="text" id="bulk-tags-input" class="form-control" placeholder="Ej: vegano, picante, promoción">
+            <div id="cat-add-tags" class="mt-2 d-flex flex-wrap gap-1"></div>
+            <div id="cat-rm-tags" class="mt-2 d-flex flex-wrap gap-1 d-none"></div>
+          </div>
+          <div id="bulk-tags-alert" class="d-none"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-info text-white" onclick="executeBulkTags()" id="bulk-tags-btn">Ejecutar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleTagAction(action) {
+      document.getElementById('bulk-tags-label').textContent = action === 'add' ? 'Tags a inyectar (simula $addToSet)' : 'Tags a extraer (simula $pull)';
+    }
+
+    async function executeBulkTags() {
+      const rid = document.getElementById('bulk-tags-restaurantId').value;
+      const action = document.getElementById('bulk-tags-action').value;
+      const rawTags = document.getElementById('bulk-tags-input').value;
+      const alertEl = document.getElementById('bulk-tags-alert');
+      const btn = document.getElementById('bulk-tags-btn');
+
+      if (!rid) {
+        alertEl.className = 'alert alert-danger mb-0';
+        alertEl.textContent = 'Selecciona un restaurante.';
+        alertEl.classList.remove('d-none');
+        return;
+      }
+
+      const tags = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+      if (!tags.length) {
+        alertEl.className = 'alert alert-danger mb-0';
+        alertEl.textContent = 'Ingresa al menos un tag válido.';
+        alertEl.classList.remove('d-none');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Procesando...';
+
+      try {
+        const res = await fetch('/api/menu-items/bulk/tags', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ restaurantId: rid, action, tags })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+          alertEl.className = 'alert alert-success mb-0';
+          alertEl.innerHTML = `✓ Se actualizaron <strong>${data.modifiedCount}</strong> platillo(s) usando <code>${action === 'add' ? '$addToSet' : '$pull'}</code>.`;
+          alertEl.classList.remove('d-none');
+          setTimeout(() => {
+            bootstrap.Modal.getInstance(document.getElementById('bulk-tags-modal')).hide();
+            alertEl.classList.add('d-none');
+            document.getElementById('bulk-tags-input').value = '';
+            loadMenu(1); // recargar tabla
+          }, 2000);
+        } else {
+          alertEl.className = 'alert alert-danger mb-0';
+          alertEl.textContent = data.error || 'Error interno al actualizar tags';
+          alertEl.classList.remove('d-none');
+        }
+      } catch (err) {
+        alertEl.className = 'alert alert-danger mb-0';
+        alertEl.textContent = 'Error de red';
+        alertEl.classList.remove('d-none');
+      }
+      
+      btn.disabled = false;
+      btn.textContent = 'Ejecutar';
+    }
+    
+    // Al cargar los restaurantes del dueño, popular el select de tags también
+    const originalLoadOwnerRestaurants = loadOwnerRestaurants;
+    loadOwnerRestaurants = async function() {
+      await originalLoadOwnerRestaurants();
+      const sel = document.getElementById('filter-restaurantId');
+      const tagsSel = document.getElementById('bulk-tags-restaurantId');
+      if (sel && tagsSel) {
+        Array.from(sel.options).forEach(opt => {
+          if (opt.value) tagsSel.appendChild(opt.cloneNode(true));
+        });
+      }
+    };
   </script>
 </body>
 </html>
