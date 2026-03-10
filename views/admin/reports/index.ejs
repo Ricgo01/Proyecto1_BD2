@@ -150,7 +150,7 @@
           <tr>
             <td><span class="badge bg-secondary">${i+1}</span></td>
             <td>${d.dishName || d._id || '—'}</td>
-            <td><strong>${d.totalSold ?? d.count ?? '—'}</strong></td>
+            <td><strong>${d.totalQuantitySold ?? d.count ?? '—'}</strong></td>
             <td>Q${(d.totalRevenue ?? 0).toFixed(2)}</td>
           </tr>`).join('');
       } else {
