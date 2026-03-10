@@ -7,7 +7,7 @@ const User = require('../models/User');
 /**
  * CREATE - Crear nuevo usuario
  */
-exports.createUser = async (req, res) => {
+exports.createUser = async (req, res, next) => {
   try {
     const { name, email, role } = req.body;
     
@@ -26,15 +26,7 @@ exports.createUser = async (req, res) => {
       user 
     });
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ 
-        error: 'El email ya está registrado' 
-      });
-    }
-    res.status(500).json({ 
-      error: 'Error al crear usuario', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -42,7 +34,7 @@ exports.createUser = async (req, res) => {
  * READ - Obtener todos los usuarios
  * Soporta: proyección, ordenamiento, paginación, filtros
  */
-exports.getAllUsers = async (req, res) => {
+exports.getAllUsers = async (req, res, next) => {
   try {
     const { 
       role, 
@@ -56,6 +48,8 @@ exports.getAllUsers = async (req, res) => {
     // Construir filtro
     const filter = {};
     if (role) filter.role = role;
+    const { q } = req.query;
+    if (q) filter.name = { $regex: q, $options: 'i' };
 
     // Construir proyección
     const projection = fields ? fields.split(',').join(' ') : '';
@@ -86,17 +80,14 @@ exports.getAllUsers = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener usuarios', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Obtener usuario por ID
  */
-exports.getUserById = async (req, res) => {
+exports.getUserById = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     
@@ -106,17 +97,14 @@ exports.getUserById = async (req, res) => {
     
     res.json({ user });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener usuario', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Actualizar usuario
  */
-exports.updateUser = async (req, res) => {
+exports.updateUser = async (req, res, next) => {
   try {
     const { name, email, role } = req.body;
     
@@ -135,22 +123,14 @@ exports.updateUser = async (req, res) => {
       user 
     });
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ 
-        error: 'El email ya está registrado' 
-      });
-    }
-    res.status(500).json({ 
-      error: 'Error al actualizar usuario', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * DELETE - Eliminar usuario
  */
-exports.deleteUser = async (req, res) => {
+exports.deleteUser = async (req, res, next) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     
@@ -163,17 +143,14 @@ exports.deleteUser = async (req, res) => {
       user 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar usuario', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Buscar usuario por email
  */
-exports.getUserByEmail = async (req, res) => {
+exports.getUserByEmail = async (req, res, next) => {
   try {
     const user = await User.findOne({ email: req.params.email });
     
@@ -183,9 +160,6 @@ exports.getUserByEmail = async (req, res) => {
     
     res.json({ user });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al buscar usuario', 
-      details: error.message 
-    });
+    next(error);
   }
 };

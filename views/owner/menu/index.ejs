@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Menu</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    .suggestion-box { position:absolute; z-index:1000; width:100%; max-height:200px; overflow-y:auto; }
+    .suggestion-item { cursor:pointer; padding:8px 12px; border-bottom:1px solid #eee; background:#fff; }
+    .suggestion-item:hover { background:#f0f4ff; }
+  </style>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>Mi Menú <small class="text-muted fs-6">Solo tus restaurantes</small></h2>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#bulk-tags-modal">&#9881; Editar Tags Masivamente</button>
+        <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulk-modal">&#8679; Carga Masiva JSON</button>
+        <a href="/menu/create" class="btn btn-dark">+ Nuevo Item</a>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <div class="row g-2">
+          <!-- Restaurant dropdown -->
+          <div class="col-md-4">
+            <select id="filter-restaurantId" class="form-select">
+              <option value="">Todos mis restaurantes</option>
+            </select>
+          </div>
+          <!-- Name search -->
+          <div class="col-md-3">
+            <input type="text" id="filter-name" class="form-control" placeholder="Buscar por nombre..."/>
+          </div>
+          <!-- Tag dropdown -->
+          <div class="col-md-2">
+            <select id="filter-tag" class="form-select">
+              <option value="">Todos los tags</option>
+            </select>
+          </div>
+          <!-- Availability -->
+          <div class="col-md-2">
+            <select id="filter-available" class="form-select">
+              <option value="">Disponibilidad</option>
+              <option value="true">Solo disponibles</option>
+              <option value="false">No disponibles</option>
+            </select>
+          </div>
+          <div class="col-md-1">
+            <button class="btn btn-primary w-100" onclick="loadMenu(1)">Buscar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="alert" class="d-none mb-3"></div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-dark">
+            <tr><th>Nombre</th><th>Precio</th><th>Tags</th><th>Disponible</th><th>Acciones</th></tr>
+          </thead>
+          <tbody id="menu-tbody">
+            <tr><td colspan="5" class="text-center py-4 text-muted">Usa los filtros para buscar</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <nav class="mt-3" id="pagination-container"></nav>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let restTimer, nameTimer;
+
+    // Load tags into dropdown
+    async function loadTags() {
+      try {
+        const res  = await fetch('/api/reports/distinct-values');
+        const data = await res.json();
+        const sel  = document.getElementById('filter-tag');
+        (data.values?.tags || []).forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          sel.appendChild(opt);
+        });
+      } catch (_) {}
+    }
+
+    // Load Owner's Restaurants into Dropdown
+    async function loadOwnerRestaurants() {
+      const user = JSON.parse(localStorage.getItem('user'));
+      try {
+        const res = await fetch(`/api/restaurants?owner_id=${user.id}&limit=100`);
+        const data = await res.json();
+        const sel     = document.getElementById('filter-restaurantId');
+        const bulkSel = document.getElementById('bulk-restaurantId');
+        if (data.restaurants) {
+          data.restaurants.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r._id;
+            opt.textContent = r.name;
+            sel.appendChild(opt);
+            if (bulkSel) bulkSel.appendChild(opt.cloneNode(true));
+          });
+        }
+        
+        // Pre-fill from URL param if present
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('restaurantId')) {
+          sel.value = urlParams.get('restaurantId');
+        }
+        
+        // Cargar menú después de tener la lista
+        loadMenu(1);
+      } catch (err) {
+        console.error("Error loading restaurants", err);
+      }
+    }
+
+    document.getElementById('filter-name').addEventListener('input', function() {
+      clearTimeout(nameTimer);
+      nameTimer = setTimeout(() => loadMenu(1), 300);
+    });
+
+    document.getElementById('filter-restaurantId').addEventListener('change', () => loadMenu(1));
+    document.getElementById('filter-tag').addEventListener('change', () => loadMenu(1));
+    document.getElementById('filter-available').addEventListener('change', () => loadMenu(1));
+
+    async function loadMenu(page = 1) {
+      const restaurantId = document.getElementById('filter-restaurantId').value.trim();
+      const nameQ        = document.getElementById('filter-name').value.trim();
+      const isAvailable  = document.getElementById('filter-available').value;
+      const tag          = document.getElementById('filter-tag').value;
+      const user         = JSON.parse(localStorage.getItem('user'));
+
+      const params = new URLSearchParams({ page, limit: 20 });
+      // Always pass owner_id — backend verifies ownership (even for specific restaurantId)
+      params.set('owner_id', user.id);
+      if (restaurantId) params.set('restaurantId', restaurantId);
+      if (nameQ)        params.set('q', nameQ);
+      if (isAvailable !== '') params.set('isAvailable', isAvailable);
+      if (tag)          params.set('tag', tag);
+
+      const res  = await fetch(`/api/menu-items?${params}`);
+      const data = await res.json();
+      const tbody = document.getElementById('menu-tbody');
+
+      if (!data.menuItems?.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin resultados</td></tr>';
+        renderPagination(0, 1); return;
+      }
+
+      tbody.innerHTML = data.menuItems.map(m => `
+        <tr class="align-middle">
+          <td>
+            ${m.photo ? `<img src="/api/images/${m.photo}" alt="foto" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" class="me-2">` : ''}
+            ${m.name}
+          </td>
+          <td>Q${m.price?.toFixed(2)}</td>
+          <td>${(m.tags||[]).map(t=>`<span class="badge bg-info text-dark me-1">${t}</span>`).join('') || '—'}</td>
+          <td>
+            <button class="btn btn-sm ${m.isAvailable ? 'btn-success' : 'btn-secondary'}"
+              onclick="toggleAvailability('${m._id}', ${m.isAvailable})">
+              ${m.isAvailable ? 'Disponible' : 'No disponible'}
+            </button>
+          </td>
+          <td>
+            <a href="/menu/${m._id}/edit" class="btn btn-sm btn-outline-secondary">Editar</a>
+            <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteMenuItem('${m._id}')" title="Eliminar platillo">🗑️</button>
+          </td>
+        </tr>`).join('');
+
+      renderPagination(data.pagination.pages, page);
+    }
+
+    async function toggleAvailability(id, current) {
+      const alertEl = document.getElementById('alert');
+      const res = await fetch(`/api/menu-items/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isAvailable: !current })
+      });
+      if (res.ok) {
+        loadMenu(1);
+      } else {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = 'Error al actualizar disponibilidad';
+        alertEl.classList.remove('d-none');
+      }
+    }
+
+    async function deleteMenuItem(id) {
+      if (!confirm('¿Estás seguro de que deseas eliminar este platillo permanentemente?')) return;
+      
+      const alertEl = document.getElementById('alert');
+      try {
+        const res = await fetch(`/api/menu-items/${id}`, {
+          method: 'DELETE'
+        });
+        
+        if (res.ok) {
+          alertEl.className = 'alert alert-success';
+          alertEl.textContent = 'Platillo eliminado correctamente';
+          alertEl.classList.remove('d-none');
+          loadMenu(1); // Recargar la tabla
+        } else {
+          const data = await res.json();
+          alertEl.className = 'alert alert-danger';
+          alertEl.textContent = data.error || 'Error al eliminar el platillo';
+          alertEl.classList.remove('d-none');
+        }
+      } catch (err) {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = 'Error de red al intentar eliminar';
+        alertEl.classList.remove('d-none');
+      }
+      
+      // Ocultar alerta después de 3 segundos
+      setTimeout(() => {
+        if (!alertEl.classList.contains('d-none')) {
+          alertEl.classList.add('d-none');
+        }
+      }, 3000);
+    }
+
+    function renderPagination(totalPages, current) {
+      const nav = document.getElementById('pagination-container');
+      if (totalPages <= 1) { nav.innerHTML = ''; return; }
+      let html = '<ul class="pagination">';
+      for (let i = 1; i <= totalPages; i++) {
+        html += `<li class="page-item ${i === current ? 'active' : ''}">
+          <button class="page-link" onclick="loadMenu(${i})">${i}</button></li>`;
+      }
+      nav.innerHTML = html + '</ul>';
+    }
+
+    loadTags();
+    loadOwnerRestaurants();
+  </script>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- Modal: Carga Masiva de Menú desde JSON              -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="modal fade" id="bulk-modal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">&#8679; Carga Masiva de Menú (JSON — <code>insertMany</code>)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Step 1: input -->
+          <div id="bulk-step1">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Restaurante destino <span class="text-danger">*</span></label>
+              <select id="bulk-restaurantId" class="form-select">
+                <option value="">-- Selecciona un restaurante --</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Subir archivo <code>.json</code></label>
+              <input type="file" id="bulk-file" class="form-control" accept=".json"
+                onchange="document.getElementById('bulk-json').value=''"/>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">O pega el JSON directamente</label>
+              <textarea id="bulk-json" rows="7" class="form-control font-monospace"
+                placeholder='[{"name":"Platillo 1","price":25.00,"tags":["pollo","caliente"],"isAvailable":true},{"name":"Platillo 2","price":30.00,"tags":["carne"],"isAvailable":true}]'
+                oninput="document.getElementById('bulk-file').value=''"></textarea>
+            </div>
+            <div class="alert alert-info small mb-0">
+              <strong>Formato esperado:</strong>
+              <code>[{"name":"Nombre","price":10.0,"tags":["tag1","tag2"],"isAvailable":true}, ...]</code><br>
+              Campos obligatorios: <strong>name</strong>, <strong>price</strong>. Opcionales: tags, isAvailable (default true).
+            </div>
+          </div>
+          <!-- Step 2: preview -->
+          <div id="bulk-step2" class="d-none">
+            <div id="bulk-preview"></div>
+          </div>
+          <!-- Step 3: result -->
+          <div id="bulk-step3" class="d-none">
+            <div id="bulk-result"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="resetBulkModal()" data-bs-dismiss="modal">Cancelar</button>
+          <button id="bulk-back-btn"    class="btn btn-outline-secondary d-none" onclick="backBulkStep()">← Volver</button>
+          <button id="bulk-preview-btn" class="btn btn-outline-primary"         onclick="previewBulk()">Vista Previa →</button>
+          <button id="bulk-import-btn"  class="btn btn-success d-none"          onclick="importBulk()">Importar todo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let _bulkItems = [];
+
+    async function _readBulkJSON() {
+      const file = document.getElementById('bulk-file').files[0];
+      const txt  = document.getElementById('bulk-json').value.trim();
+      if (file) {
+        return new Promise((ok, fail) => {
+          const r = new FileReader();
+          r.onload = e => { try { ok(JSON.parse(e.target.result)); } catch { fail('Archivo JSON inválido'); } };
+          r.readAsText(file);
+        });
+      }
+      if (txt) { try { return JSON.parse(txt); } catch { throw 'JSON inválido'; } }
+      throw 'Sube un archivo o pega el JSON';
+    }
+
+    async function previewBulk() {
+      const rid = document.getElementById('bulk-restaurantId').value;
+      if (!rid) return alert('Selecciona un restaurante primero.');
+      try {
+        const raw = await _readBulkJSON();
+        if (!Array.isArray(raw) || !raw.length) return alert('El JSON debe ser un array no vacío.');
+        _bulkItems = raw;
+        _renderBulkPreview();
+        document.getElementById('bulk-step1').classList.add('d-none');
+        document.getElementById('bulk-step2').classList.remove('d-none');
+        document.getElementById('bulk-preview-btn').classList.add('d-none');
+        document.getElementById('bulk-back-btn').classList.remove('d-none');
+        document.getElementById('bulk-import-btn').classList.remove('d-none');
+      } catch (e) { alert(e); }
+    }
+
+    function _renderBulkPreview() {
+      const valid   = _bulkItems.filter(i => i.name && i.price != null);
+      const invalid = _bulkItems.length - valid.length;
+      document.getElementById('bulk-preview').innerHTML = `
+        <div class="alert alert-${invalid ? 'warning' : 'success'} mb-2">
+          <strong>${valid.length}</strong> item(s) válidos${invalid ? ` · <strong>${invalid}</strong> con errores (sin <em>name</em> o <em>price</em>) — serán ignorados` : ' — todo OK ✓'}
+        </div>
+        <div style="max-height:380px;overflow-y:auto">
+        <table class="table table-sm table-bordered mb-0">
+          <thead class="table-secondary sticky-top"><tr><th>#</th><th>Nombre</th><th>Precio</th><th>Tags</th><th>Disponible</th><th></th></tr></thead>
+          <tbody>
+            ${_bulkItems.map((it,i) => `
+              <tr class="${!it.name||it.price==null?'table-danger':''}">
+                <td class="text-muted">${i+1}</td>
+                <td>${it.name||'<em class="text-danger">falta</em>'}</td>
+                <td>${it.price!=null?'Q'+parseFloat(it.price).toFixed(2):'<em class="text-danger">falta</em>'}</td>
+                <td>${(it.tags||[]).map(t=>'<span class="badge bg-info text-dark me-1">'+t+'</span>').join('')||'—'}</td>
+                <td>${it.isAvailable!==false?'✓':'✗'}</td>
+                <td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="_bulkItems.splice(${i},1);_renderBulkPreview()">✕</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function importBulk() {
+      const user = JSON.parse(localStorage.getItem('user'));
+      const rid  = document.getElementById('bulk-restaurantId').value;
+      const valid = _bulkItems.filter(i => i.name && i.price != null);
+      if (!valid.length) return alert('No hay items válidos.');
+
+      const btn = document.getElementById('bulk-import-btn');
+      btn.disabled = true; btn.textContent = 'Importando...';
+
+      try {
+        const res  = await fetch('/api/menu-items/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ restaurantId: rid, items: valid, owner_id: user.id })
+        });
+        const data = await res.json();
+        document.getElementById('bulk-step2').classList.add('d-none');
+        document.getElementById('bulk-step3').classList.remove('d-none');
+        document.getElementById('bulk-import-btn').classList.add('d-none');
+        document.getElementById('bulk-result').innerHTML = res.ok
+          ? `<div class="alert alert-success fs-5">✓ Se importaron <strong>${data.insertedCount}</strong> platillo(s) correctamente.</div>`
+          : `<div class="alert alert-danger">Error: ${data.error || 'desconocido'}</div>`;
+        if (res.ok) setTimeout(() => {
+          bootstrap.Modal.getInstance(document.getElementById('bulk-modal')).hide();
+          resetBulkModal();
+          loadMenu(1);
+        }, 1800);
+      } catch (_) {
+        document.getElementById('bulk-result').innerHTML = '<div class="alert alert-danger">Error de red al importar.</div>';
+      }
+      btn.disabled = false; btn.textContent = 'Importar todo';
+    }
+
+    function backBulkStep() {
+      document.getElementById('bulk-step2').classList.add('d-none');
+      document.getElementById('bulk-step1').classList.remove('d-none');
+      document.getElementById('bulk-preview-btn').classList.remove('d-none');
+      document.getElementById('bulk-back-btn').classList.add('d-none');
+      document.getElementById('bulk-import-btn').classList.add('d-none');
+    }
+
+    function resetBulkModal() {
+      _bulkItems = [];
+      document.getElementById('bulk-step1').classList.remove('d-none');
+      document.getElementById('bulk-step2').classList.add('d-none');
+      document.getElementById('bulk-step3').classList.add('d-none');
+      document.getElementById('bulk-preview-btn').classList.remove('d-none');
+      document.getElementById('bulk-back-btn').classList.add('d-none');
+      document.getElementById('bulk-import-btn').classList.add('d-none');
+      document.getElementById('bulk-file').value = '';
+      document.getElementById('bulk-json').value = '';
+    }
+    document.getElementById('bulk-modal').addEventListener('hidden.bs.modal', resetBulkModal);
+  </script>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- Modal: Editar Tags Masivamente                       -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="modal fade" id="bulk-tags-modal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">&#9881; Actualizar Tags Masivamente (UpdateMany + $addToSet / $pull)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">1. Restaurante objetivo</label>
+            <select id="bulk-tags-restaurantId" class="form-select">
+              <option value="">-- Selecciona un restaurante --</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">2. Acción</label>
+            <select id="bulk-tags-action" class="form-select" onchange="toggleTagAction(this.value)">
+              <option value="add">Agregar Tags (UpdateMany + $addToSet)</option>
+              <option value="remove">Remover Tags (UpdateMany + $pull)</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label id="bulk-tags-label" class="form-label fw-semibold">Tags a inyectar (separados por coma)</label>
+            <input type="text" id="bulk-tags-input" class="form-control" placeholder="Ej: vegano, picante, promoción">
+            <div id="cat-add-tags" class="mt-2 d-flex flex-wrap gap-1"></div>
+            <div id="cat-rm-tags" class="mt-2 d-flex flex-wrap gap-1 d-none"></div>
+          </div>
+          <div id="bulk-tags-alert" class="d-none"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-info text-white" onclick="executeBulkTags()" id="bulk-tags-btn">Ejecutar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleTagAction(action) {
+      document.getElementById('bulk-tags-label').textContent = action === 'add' ? 'Tags a inyectar (simula $addToSet)' : 'Tags a extraer (simula $pull)';
+    }
+
+    async function executeBulkTags() {
+      const rid = document.getElementById('bulk-tags-restaurantId').value;
+      const action = document.getElementById('bulk-tags-action').value;
+      const rawTags = document.getElementById('bulk-tags-input').value;
+      const alertEl = document.getElementById('bulk-tags-alert');
+      const btn = document.getElementById('bulk-tags-btn');
+
+      if (!rid) {
+        alertEl.className = 'alert alert-danger mb-0';
+        alertEl.textContent = 'Selecciona un restaurante.';
+        alertEl.classList.remove('d-none');
+        return;
+      }
+
+      const tags = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+      if (!tags.length) {
+        alertEl.className = 'alert alert-danger mb-0';
+        alertEl.textContent = 'Ingresa al menos un tag válido.';
+        alertEl.classList.remove('d-none');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Procesando...';
+
+      try {
+        const res = await fetch('/api/menu-items/bulk/tags', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ restaurantId: rid, action, tags })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+          alertEl.className = 'alert alert-success mb-0';
+          alertEl.innerHTML = `✓ Se actualizaron <strong>${data.modifiedCount}</strong> platillo(s) usando <code>${action === 'add' ? '$addToSet' : '$pull'}</code>.`;
+          alertEl.classList.remove('d-none');
+          setTimeout(() => {
+            bootstrap.Modal.getInstance(document.getElementById('bulk-tags-modal')).hide();
+            alertEl.classList.add('d-none');
+            document.getElementById('bulk-tags-input').value = '';
+            loadMenu(1); // recargar tabla
+          }, 2000);
+        } else {
+          alertEl.className = 'alert alert-danger mb-0';
+          alertEl.textContent = data.error || 'Error interno al actualizar tags';
+          alertEl.classList.remove('d-none');
+        }
+      } catch (err) {
+        alertEl.className = 'alert alert-danger mb-0';
+        alertEl.textContent = 'Error de red';
+        alertEl.classList.remove('d-none');
+      }
+      
+      btn.disabled = false;
+      btn.textContent = 'Ejecutar';
+    }
+    
+    // Al cargar los restaurantes del dueño, popular el select de tags también
+    const originalLoadOwnerRestaurants = loadOwnerRestaurants;
+    loadOwnerRestaurants = async function() {
+      await originalLoadOwnerRestaurants();
+      const sel = document.getElementById('filter-restaurantId');
+      const tagsSel = document.getElementById('bulk-tags-restaurantId');
+      if (sel && tagsSel) {
+        Array.from(sel.options).forEach(opt => {
+          if (opt.value) tagsSel.appendChild(opt.cloneNode(true));
+        });
+      }
+    };
+  </script>
+</body>
+</html>

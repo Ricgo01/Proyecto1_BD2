@@ -7,7 +7,7 @@ const transactionService = require('../services/transactionService');
 /**
  * POST - Crear reseña con actualización de rating (Transacción 1)
  */
-exports.createReviewWithTransaction = async (req, res) => {
+exports.createReviewWithTransaction = async (req, res, next) => {
   try {
     const { restaurantId, userId, orderId, rating, comment } = req.body;
     
@@ -38,17 +38,14 @@ exports.createReviewWithTransaction = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error en transacción de reseña', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * POST - Cancelar pedido con auditoría (Transacción 2)
  */
-exports.cancelOrderWithTransaction = async (req, res) => {
+exports.cancelOrderWithTransaction = async (req, res, next) => {
   try {
     const { orderId } = req.params;
     const { userId, reason } = req.body;
@@ -71,17 +68,14 @@ exports.cancelOrderWithTransaction = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error en transacción de cancelación', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * GET - Obtener logs de auditoría
  */
-exports.getAuditLogs = async (req, res) => {
+exports.getAuditLogs = async (req, res, next) => {
   try {
     const { orderId, userId, action, page, limit } = req.query;
     
@@ -95,10 +89,7 @@ exports.getAuditLogs = async (req, res) => {
     res.json(result);
 
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener logs de auditoría', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 

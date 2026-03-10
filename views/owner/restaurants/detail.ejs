@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Restaurante</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+  <div class="container py-4">
+    <a href="/restaurants" class="btn btn-sm btn-outline-secondary mb-3">← Volver</a>
+
+    <!-- Info restaurante -->
+    <div class="card shadow-sm mb-4" id="card-restaurant">
+      <div class="card-body text-center text-muted py-5">Cargando...</div>
+    </div>
+
+
+
+    <div class="row">
+      <!-- Pedidos del restaurante -->
+      <div class="col-md-6 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">Últimas Órdenes</h4>
+          <div class="d-flex align-items-center gap-2">
+            <select id="orders-status-filter" class="form-select form-select-sm w-auto" onchange="loadOrders()">
+              <option value="">Todos los estados</option>
+              <option value="created">Created</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="preparing">Preparing</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+            <button class="btn btn-sm btn-outline-secondary" id="orders-prev" onclick="slidePrev('orders')" disabled>&#8249;</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" id="orders-next" onclick="slideNext('orders')" disabled>&#8250;</button>
+            <span class="ms-2 small text-muted" id="orders-page-label"></span>
+          </div>
+        </div>
+        <div class="card shadow-sm">
+          <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="orders-list">
+              <li class="list-group-item text-center text-muted py-3">Cargando...</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reseñas del restaurante -->
+      <div class="col-md-6 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">Reseñas de Clientes</h4>
+          <div>
+            <button class="btn btn-sm btn-outline-secondary" id="reviews-prev" onclick="slidePrev('reviews')" disabled>&#8249;</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" id="reviews-next" onclick="slideNext('reviews')" disabled>&#8250;</button>
+            <span class="ms-2 small text-muted" id="reviews-page-label"></span>
+          </div>
+        </div>
+        <div class="card shadow-sm">
+          <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="reviews-list">
+              <li class="list-group-item text-center text-muted py-3">Cargando...</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gráficos de Mongo Charts -->
+      <div class="col-md-4 mb-4">
+        <h4 class="mb-3">Ventas Mensuales</h4>
+        <div class="card shadow-sm">
+          <div class="card-body text-center p-0" id="chart-container-1" style="background: #f8f9fa;">
+            <div class="py-5 text-muted">Cargando gráfico de desempeño...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <h4 class="mb-3">Platillos Más Vendidos (Top)</h4>
+        <div class="card shadow-sm">
+          <div class="card-body text-center p-0" id="chart-container-2" style="background: #f8f9fa;">
+            <div class="py-5 text-muted">Cargando gráfico de desempeño...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <h4 class="mb-3">Resumen de Calificaciones</h4>
+        <div class="card shadow-sm">
+          <div class="card-body text-center p-0" id="chart-container-3" style="background: #f8f9fa;">
+            <div class="py-5 text-muted">Cargando gráfico de desempeño...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const restaurantId = window.location.pathname.split('/').pop();
+    const currentUser  = JSON.parse(localStorage.getItem('user')) || {};
+
+    async function loadRestaurant() {
+      const res  = await fetch(`/api/restaurants/${restaurantId}`);
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('card-restaurant').innerHTML =
+          `<div class="card-body text-danger">Error: ${data.error?.message || 'No encontrado'}</div>`;
+        return;
+      }
+      const r = data.restaurant;
+      // Ownership check: owner_id is populated as { _id, name, email }
+      const ownerId = r.owner_id?._id ?? r.owner_id;
+      const isOwner = currentUser.id && ownerId && ownerId.toString() === currentUser.id.toString();
+
+      if (!isOwner) {
+        document.getElementById('card-restaurant').innerHTML =
+          `<div class="card-body">
+            <h3>${r.name}</h3><p class="text-muted">${r.address}</p>
+            <div>${(r.categories||[]).map(c=>`<span class="badge bg-secondary me-1">${c}</span>`).join('')}</div>
+          </div>`;
+        document.getElementById('btn-add-item').classList.add('d-none');
+        return;
+      }
+
+      document.getElementById('card-restaurant').innerHTML = `
+        <div class="card-body">
+          <div class="row align-items-center">
+            ${r.image ? `
+            <div class="col-md-2 text-center mb-3 mb-md-0">
+               <img src="/api/images/${r.image}" class="img-fluid rounded shadow-sm" style="max-height: 120px; object-fit: cover;">
+            </div>
+            <div class="col-md-6">` : `<div class="col-md-8">`}
+              <h3 class="mb-1">${r.name}</h3>
+              <p class="text-muted mb-2">${r.address}</p>
+              <div class="mb-3">${(r.categories||[]).map(c=>`<span class="badge bg-secondary me-1">${c}</span>`).join('')}</div>
+              
+              <!-- Formulario de Categoría Nueva ($addToSet) -->
+              <div class="d-flex align-items-center mb-2">
+                <input type="text" id="newCategory" class="form-control form-control-sm w-auto me-2" placeholder="Nueva Categoría ($addToSet)">
+                <button class="btn btn-sm btn-outline-primary" onclick="addCategory('${r._id}')">Añadir</button>
+              </div>
+              <div class="mt-2">
+                <a href="/restaurants/${r._id}/edit" class="btn btn-sm btn-warning">✏️ Editar Restaurante</a>
+              </div>
+
+            </div>
+            <div class="col-md-4 text-md-end">
+              <div class="fs-3 fw-bold text-warning">${r.avgRating?.toFixed(1) ?? '—'}</div>
+              <div class="text-muted small">${r.ratingCount ?? 0} reseñas</div>
+              <div class="text-muted small mt-1"><strong>${r.orderCount ?? 0}</strong> pedidos históricos</div>
+              <div class="text-muted small"><strong>${r.activeItemsCount ?? 0}</strong> items activos</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+
+
+    async function addCategory(restId) {
+      const cat = document.getElementById('newCategory').value.trim();
+      if(!cat) return alert('Escribe una categoría a añadir');
+      
+      const res = await fetch(`/api/restaurants/${restId}/categories`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id || '' },
+        body: JSON.stringify({ category: cat })
+      });
+      if(res.ok) window.location.reload();
+      else alert((await res.json()).error || 'Error añadiendo categoría (evitando duplicados)');
+    }
+
+    async function loadReviews() {
+      try {
+        const res = await fetch(`/api/reviews?restaurantId=${restaurantId}&limit=100`);
+        const data = await res.json();
+        const list = document.getElementById('reviews-list');
+        if (!data.reviews?.length) {
+          list.innerHTML = '<li class="list-group-item text-center text-muted py-3">Este restaurante aún no tiene reseñas.</li>';
+          return;
+        }
+        sliders.reviews.items = data.reviews.map(r => `
+          <li class="list-group-item">
+            <div class="d-flex justify-content-between">
+              <strong>${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</strong>
+              <small class="text-muted">${new Date(r.createdAt).toLocaleDateString()}</small>
+            </div>
+            <p class="mb-0 mt-1 small">${r.comment || '<i>Sin comentario</i>'}</p>
+          </li>
+        `);
+        sliders.reviews.page = 0;
+        renderSlider('reviews');
+      } catch (err) {}
+    }
+
+    async function updateOrderStatus(orderId, newStatus) {
+      if(!confirm(`¿Cambiar estado de la orden a: ${newStatus.toUpperCase()}?`)) {
+        // Restaurar dropdown al valor original si el usuario cancela
+        loadOrders(); 
+        return;
+      }
+      try {
+        const res = await fetch(`/api/orders/${orderId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        if(res.ok) alert('Estado actualizado');
+        else alert('Error al actualizar estado');
+        loadOrders();
+      } catch (err) { alert('Error de conexión'); }
+    }
+
+    async function loadOrders() {
+      try {
+        const statusFilter = document.getElementById('orders-status-filter')?.value || '';
+        const statusParam = statusFilter ? `&status=${statusFilter}` : '';
+        const res = await fetch(`/api/orders?restaurantId=${restaurantId}&limit=100${statusParam}`);
+        const data = await res.json();
+        const list = document.getElementById('orders-list');
+        if (!data.orders?.length) {
+          list.innerHTML = '<li class="list-group-item text-center text-muted py-3">No hay pedidos registrados todavía.</li>';
+          return;
+        }
+        sliders.orders.items = data.orders.map(o => {
+          const s = o.status;
+          return `
+          <li class="list-group-item">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <select class="form-select form-select-sm w-auto fw-bold text-dark 
+                ${s === 'delivered' ? 'bg-success text-white' : s === 'cancelled' ? 'bg-danger text-white' : 'bg-primary text-white'}" 
+                onchange="updateOrderStatus('${o._id}', this.value)">
+                <option value="created" ${s==='created'?'selected':''}>CREATED</option>
+                <option value="confirmed" ${s==='confirmed'?'selected':''}>CONFIRMED</option>
+                <option value="preparing" ${s==='preparing'?'selected':''}>PREPARING</option>
+                <option value="delivered" ${s==='delivered'?'selected':''}>DELIVERED</option>
+                <option value="cancelled" ${s==='cancelled'?'selected':''}>CANCELLED</option>
+              </select>
+              <span class="fw-bold">$${o.totalAmount.toFixed(2)}</span>
+            </div>
+            <div class="small text-muted d-flex justify-content-between mt-2">
+              <span>Por: <a href="/orders/${o._id}" class="text-decoration-none">${o.userId?.name || 'Cliente'} (Ver Folio)</a></span>
+              <span>${new Date(o.createdAt).toLocaleDateString()}</span>
+            </div>
+          </li>
+        `;
+        });
+        sliders.orders.page = 0;
+        renderSlider('orders');
+      } catch (err) {}
+    }
+
+    function loadChart() {
+      // Configuraciones base extraidas de tus URLs
+      const baseUrl1 = "https://charts.mongodb.com/charts-project-0-zepvwzg/embed/charts?id=5ca2b87b-2b89-4db1-a1a7-10d53fdfca10&maxDataAge=14400&theme=light&autoRefresh=true";
+      const baseUrl2 = "https://charts.mongodb.com/charts-project-0-zepvwzg/embed/charts?id=6918eed7-b846-48d0-80cc-67354213688b&maxDataAge=14400&theme=light&autoRefresh=true";
+      const baseUrl3 = "https://charts.mongodb.com/charts-project-0-zepvwzg/embed/charts?id=28eb7db3-97b1-4b15-9f18-398e2e35f65b&maxDataAge=14400&theme=light&autoRefresh=true";
+      
+      // MongoDB requiere especificar explícitamente que es un $oid para hacer Match contra ObjectIds nativos
+      const filtroJson = { "restaurantId": { "$oid": restaurantId } };
+      const filtroCodificado = encodeURIComponent(JSON.stringify(filtroJson));
+
+      // Armamos los iframes inyectando el filtroCodificado
+      const iframeHTML1 = `<iframe 
+        style="background: #FFFFFF; border: none; border-radius: 2px; width: 100%; min-height: 480px;" 
+        src="${baseUrl1}&filter=${filtroCodificado}">
+      </iframe>`;
+
+      const iframeHTML2 = `<iframe 
+        style="background: #FFFFFF; border: none; border-radius: 2px; width: 100%; min-height: 480px;" 
+        src="${baseUrl2}&filter=${filtroCodificado}">
+      </iframe>`;
+      
+      const iframeHTML3 = `<iframe 
+        style="background: #FFFFFF; border: none; border-radius: 2px; width: 100%; min-height: 480px;" 
+        src="${baseUrl3}&filter=${filtroCodificado}">
+      </iframe>`;
+
+      // Los inyectamos en el HTML
+      const container1 = document.getElementById('chart-container-1');
+      if(container1) container1.innerHTML = iframeHTML1;
+
+      const container2 = document.getElementById('chart-container-2');
+      if(container2) container2.innerHTML = iframeHTML2;
+      
+      const container3 = document.getElementById('chart-container-3');
+      if(container3) container3.innerHTML = iframeHTML3;
+    }
+
+    // ── Mini Sliders ─────────────────────────────────────────────────────────
+    const sliders = {
+      orders:  { items: [], page: 0, perPage: 3 },
+      reviews: { items: [], page: 0, perPage: 3 }
+    };
+
+    loadRestaurant();
+    loadReviews();
+    loadOrders();
+    loadChart();
+
+    function renderSlider(key) {
+      const s     = sliders[key];
+      const list  = document.getElementById(`${key}-list`);
+      const prev  = document.getElementById(`${key}-prev`);
+      const next  = document.getElementById(`${key}-next`);
+      const label = document.getElementById(`${key}-page-label`);
+      if (!s.items.length) return;
+      const start = s.page * s.perPage;
+      list.innerHTML = s.items.slice(start, start + s.perPage).join('');
+      prev.disabled  = s.page === 0;
+      next.disabled  = start + s.perPage >= s.items.length;
+      const total    = Math.ceil(s.items.length / s.perPage);
+      label.textContent = total > 1 ? `${s.page + 1}/${total}` : '';
+    }
+
+    window.slidePrev = function(key) {
+      if (sliders[key].page > 0) { sliders[key].page--; renderSlider(key); }
+    };
+    window.slideNext = function(key) {
+      const s = sliders[key];
+      if ((s.page + 1) * s.perPage < s.items.length) { s.page++; renderSlider(key); }
+    };
+  </script>
+</body>
+</html>

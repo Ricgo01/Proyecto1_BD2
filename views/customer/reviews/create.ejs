@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Escribir Reseña</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .star-rating { direction: rtl; display: inline-flex; }
+    .star-rating input { display: none; }
+    .star-rating label { font-size: 2.5rem; color: #dee2e6; cursor: pointer; transition: color 0.2s; }
+    .star-rating label:hover, .star-rating label:hover ~ label, .star-rating input:checked ~ label { color: #ffc107; text-shadow: 0 0 5px #ffc107; }
+  </style>
+  <script>
+    if (!localStorage.getItem('user')) window.location.href = '/login';
+  </script>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+
+  <div class="container py-4">
+    <div class="row justify-content-center">
+      <div class="col-md-8 col-lg-6">
+        <div class="card shadow-sm border-0">
+          <div class="card-header bg-primary text-white pt-4 pb-3">
+            <h4 class="mb-0 text-center">Cuéntanos tu Experiencia</h4>
+          </div>
+          <div class="card-body p-4">
+            
+            <form id="reviewForm">
+              
+              <!-- Selector de Orden Dinámica -->
+              <div class="mb-4">
+                <label class="form-label text-muted fw-bold">ID del Pedido</label>
+                <select id="orderId" class="form-select" required>
+                  <option value="">Cargando tus pedidos recientes...</option>
+                </select>
+                <div class="form-text">Solo puedes reseñar pedidos que ya fueron entregados.</div>
+              </div>
+
+              <!-- Estrellas Dinámicas -->
+              <div class="mb-4 text-center">
+                <label class="form-label text-muted d-block fw-bold">Calificación</label>
+                <div class="star-rating">
+                  <input type="radio" id="star5" name="rating" value="5" required />
+                  <label for="star5" title="5 estrellas">★</label>
+                  <input type="radio" id="star4" name="rating" value="4" />
+                  <label for="star4" title="4 estrellas">★</label>
+                  <input type="radio" id="star3" name="rating" value="3" />
+                  <label for="star3" title="3 estrellas">★</label>
+                  <input type="radio" id="star2" name="rating" value="2" />
+                  <label for="star2" title="2 estrellas">★</label>
+                  <input type="radio" id="star1" name="rating" value="1" />
+                  <label for="star1" title="1 estrella">★</label>
+                </div>
+              </div>
+
+              <!-- Comentario -->
+              <div class="mb-4">
+                <label class="form-label text-muted fw-bold">Tus Comentarios</label>
+                <textarea id="comment" class="form-control" rows="4" placeholder="¿Qué te pareció la comida y el servicio? Opcional." maxlength="500"></textarea>
+              </div>
+
+              <div id="alertPlaceholder"></div>
+
+              <button type="submit" id="btnSubmit" class="btn btn-primary w-100 py-2 fs-5 fw-bold">Publicar Reseña</button>
+
+            </form>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const user = JSON.parse(localStorage.getItem('user'));
+
+    // Cargar Historial de Órdenes Entregadas del Usuario
+    async function loadOrders() {
+      try {
+        const orderSelect = document.getElementById('orderId');
+        
+        // Buscamos todas las ordenes del usuario que esten en 'delivered'
+        const res = await fetch(`/api/orders?userId=${user.id}&status=delivered&limit=50`);
+        const data = await res.json();
+
+        if (data.orders && data.orders.length > 0) {
+          orderSelect.innerHTML = '<option value="">-- Elige la orden que quieres evaluar --</option>';
+          data.orders.forEach(o => {
+            const productNames = o.items.map(item => item.nameSnapshot).join(', ');
+            const dateStr = new Date(o.createdAt).toLocaleDateString();
+            
+            // Guardamos el restaurantId en un atributo de datos para enviarlo luego
+            orderSelect.innerHTML += `
+              <option value="${o._id}" data-restid="${o.restaurantId._id || o.restaurantId}">
+                ${dateStr} | ${o.restaurantId.name || 'Restaurante'} | $${o.totalAmount} | Items: ${productNames}
+              </option>
+            `;
+          });
+          orderSelect.disabled = false;
+        } else {
+          orderSelect.innerHTML = '<option value="">Aún no tienes pedidos entregados para calificar</option>';
+          orderSelect.disabled = true;
+        }
+      } catch (err) {
+        console.error(err);
+        document.getElementById('orderId').innerHTML = '<option value="">Error obteniendo pedidos libres</option>';
+      }
+    }
+    loadOrders();
+
+    // Enviar formulario (Transacción 1 en Backend!)
+    document.getElementById('reviewForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const btn = document.getElementById('btnSubmit');
+      const alert = document.getElementById('alertPlaceholder');
+      
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
+
+      // Capturar valor de las estrellas (right-to-left por CSS)
+      const ratingInput = document.querySelector('input[name="rating"]:checked');
+      
+      if (!ratingInput) {
+        alert.innerHTML = `<div class="alert alert-warning">Por favor califica con estrellas.</div>`;
+        btn.disabled = false;
+        btn.innerHTML = 'Publicar Reseña';
+        return;
+      }
+
+      // Extraer el option seleccionado para sacar el restaurante
+      const orderSelect = document.getElementById('orderId');
+      const selectedOption = orderSelect.options[orderSelect.selectedIndex];
+      const restId = selectedOption ? selectedOption.getAttribute('data-restid') : null;
+
+      if (!restId) {
+        alert.innerHTML = `<div class="alert alert-warning">Por favor elige un pedido válido.</div>`;
+        btn.disabled = false;
+        btn.innerHTML = 'Publicar Reseña';
+        return;
+      }
+
+      const payload = {
+        restaurantId: restId,
+        userId: user.id, // Referencia del creador de la reseña
+        orderId: orderSelect.value, 
+        rating: parseInt(ratingInput.value),
+        comment: document.getElementById('comment').value
+      };
+
+      try {
+        const res = await fetch('/api/transactions/review-with-rating', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          alert.innerHTML = `<div class="alert alert-success">¡Reseña publicada! Se recalculó el promedio del local.</div>`;
+          setTimeout(() => window.location.href = '/reviews', 2500);
+        } else {
+          alert.innerHTML = `<div class="alert alert-danger">${data.error || 'No cumple reglas para publicar la reseña'}</div>`;
+          btn.disabled = false;
+          btn.innerHTML = 'Publicar Reseña';
+        }
+      } catch (err) {
+        alert.innerHTML = `<div class="alert alert-danger">Error de Servidor</div>`;
+        btn.disabled = false;
+        btn.innerHTML = 'Publicar Reseña';
+      }
+    });
+  </script>
+</body>
+</html>

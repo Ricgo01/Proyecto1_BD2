@@ -11,6 +11,7 @@ const Review = require('../models/Review');
 const Restaurant = require('../models/Restaurant');
 const Order = require('../models/Order');
 const User = require('../models/User');
+const AuditLog = require('../models/AuditLog');
 
 /**
  * TRANSACTION 1: Crear reseña y actualizar rating del restaurante
@@ -132,20 +133,7 @@ const cancelOrderWithAudit = async (orderId, userId, reason = 'Usuario canceló 
     order.updatedAt = Date.now();
     await order.save({ session });
 
-    // 5. Crear registro de auditoría
-    // Nota: En un sistema real, tendrías una colección OrderAuditLog
-    // Para simplicidad, usaremos una colección genérica
-    const AuditLog = mongoose.model('AuditLog', new mongoose.Schema({
-      orderId: mongoose.Schema.Types.ObjectId,
-      userId: mongoose.Schema.Types.ObjectId,
-      action: String,
-      previousStatus: String,
-      newStatus: String,
-      refundAmount: Number,
-      reason: String,
-      timestamp: { type: Date, default: Date.now }
-    }));
-
+    // 5. Crear registro de auditoría utilizando el modelo importado
     const auditLog = new AuditLog({
       orderId: order._id,
       userId: userId || order.userId,
@@ -196,12 +184,7 @@ const cancelOrderWithAudit = async (orderId, userId, reason = 'Usuario canceló 
   }
 };
 
-/**
- * Helper: Obtener logs de auditoría
- */
 const getAuditLogs = async (filters = {}, options = {}) => {
-  const AuditLog = mongoose.model('AuditLog');
-  
   const { page = 1, limit = 20 } = options;
   const skip = (page - 1) * limit;
 

@@ -7,9 +7,9 @@ const MenuItem = require('../models/MenuItem');
 /**
  * CREATE - Crear nuevo item del menú
  */
-exports.createMenuItem = async (req, res) => {
+exports.createMenuItem = async (req, res, next) => {
   try {
-    const { restaurantId, name, price, tags, isAvailable } = req.body;
+    const { restaurantId, name, price, tags, isAvailable, photo } = req.body;
     
     // Validación
     if (!restaurantId || !name || price === undefined) {
@@ -23,7 +23,8 @@ exports.createMenuItem = async (req, res) => {
       name,
       price,
       tags: tags || [],
-      isAvailable: isAvailable !== undefined ? isAvailable : true
+      isAvailable: isAvailable !== undefined ? isAvailable : true,
+      photo: photo || null
     });
     
     await menuItem.save();
@@ -33,10 +34,7 @@ exports.createMenuItem = async (req, res) => {
       menuItem 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al crear item del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -44,10 +42,11 @@ exports.createMenuItem = async (req, res) => {
  * READ - Obtener items del menú
  * Soporta: filtros por restaurante, disponibilidad, tags
  */
-exports.getAllMenuItems = async (req, res) => {
+exports.getAllMenuItems = async (req, res, next) => {
   try {
     const { 
       restaurantId,
+      owner_id,
       isAvailable,
       tag,
       page = 1, 
@@ -58,9 +57,27 @@ exports.getAllMenuItems = async (req, res) => {
 
     // Construir filtro
     const filter = {};
-    if (restaurantId) filter.restaurantId = restaurantId;
+    const Restaurant = require('../models/Restaurant');
+
+    if (restaurantId && owner_id) {
+      // Verify the restaurant belongs to this owner (security check)
+      const rest = await Restaurant.findById(restaurantId).lean();
+      if (!rest || rest.owner_id.toString() !== owner_id.toString()) {
+        return res.status(403).json({ error: 'No autorizado: el restaurante no te pertenece' });
+      }
+      filter.restaurantId = restaurantId;
+    } else if (restaurantId) {
+      filter.restaurantId = restaurantId;
+    } else if (owner_id) {
+      // Filtrar sólo los items que pertenecen a restaurantes de este owner
+      const ownerRests = await Restaurant.find({ owner_id }, '_id').lean();
+      filter.restaurantId = { $in: ownerRests.map(r => r._id) };
+    }
+
     if (isAvailable !== undefined) filter.isAvailable = isAvailable === 'true';
-    if (tag) filter.tags = tag;
+    if (tag) filter.tags = { $regex: tag, $options: 'i' };
+    const { q } = req.query;
+    if (q) filter.name = { $regex: q, $options: 'i' };
 
     // Ordenamiento
     const sort = { [sortBy]: order === 'desc' ? -1 : 1 };
@@ -87,17 +104,14 @@ exports.getAllMenuItems = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener items del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Obtener item por ID
  */
-exports.getMenuItemById = async (req, res) => {
+exports.getMenuItemById = async (req, res, next) => {
   try {
     const menuItem = await MenuItem.findById(req.params.id)
       .populate('restaurantId', 'name address');
@@ -108,17 +122,14 @@ exports.getMenuItemById = async (req, res) => {
     
     res.json({ menuItem });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener item del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Actualizar item del menú
  */
-exports.updateMenuItem = async (req, res) => {
+exports.updateMenuItem = async (req, res, next) => {
   try {
     const updates = req.body;
     
@@ -137,17 +148,14 @@ exports.updateMenuItem = async (req, res) => {
       menuItem 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al actualizar item del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * DELETE - Eliminar item del menú
  */
-exports.deleteMenuItem = async (req, res) => {
+exports.deleteMenuItem = async (req, res, next) => {
   try {
     const menuItem = await MenuItem.findByIdAndDelete(req.params.id);
     
@@ -160,40 +168,129 @@ exports.deleteMenuItem = async (req, res) => {
       menuItem 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar item del menú', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
- * UPDATE - Actualizar disponibilidad masiva
- * Ejemplo: marcar múltiples items como no disponibles
+ * CREATE masiva - Insertar múltiples items desde JSON (insertMany)
  */
-exports.bulkUpdateAvailability = async (req, res) => {
+exports.bulkCreateMenuItems = async (req, res, next) => {
   try {
-    const { itemIds, isAvailable } = req.body;
+    const { restaurantId, items, owner_id } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: 'restaurantId requerido' });
+    }
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({ error: 'items debe ser un array no vacío' });
+    }
+
+    // Verify ownership when owner_id is provided
+    if (owner_id) {
+      const Restaurant = require('../models/Restaurant');
+      const rest = await Restaurant.findById(restaurantId).lean();
+      if (!rest) return res.status(404).json({ error: 'Restaurante no encontrado' });
+      if (rest.owner_id.toString() !== owner_id.toString()) {
+        return res.status(403).json({ error: 'No autorizado: el restaurante no te pertenece' });
+      }
+    }
+
+    const toInsert = items
+      .filter(i => i.name && i.price != null)
+      .map(i => ({
+        restaurantId,
+        name:        String(i.name).trim(),
+        price:       parseFloat(i.price),
+        tags:        Array.isArray(i.tags) ? i.tags : [],
+        isAvailable: i.isAvailable !== false,
+        photo:       i.photo || null
+      }));
+
+    if (!toInsert.length) {
+      return res.status(400).json({ error: 'Ningún item válido (se requiere name y price en cada objeto)' });
+    }
+
+    const inserted = await MenuItem.insertMany(toInsert, { ordered: false });
+
+    res.status(201).json({
+      message: `${inserted.length} item(s) importados exitosamente`,
+      insertedCount: inserted.length
+    });
+  } catch (error) {
+    if (error.name === 'BulkWriteError') {
+      return res.status(207).json({
+        message: 'Importación parcial',
+        insertedCount: error.result?.nInserted ?? 0,
+        errors: error.writeErrors?.length ?? 0
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * UPDATE - Actualizar disponibilidad masiva (para un restaurante)
+ */
+exports.bulkUpdateAvailability = async (req, res, next) => {
+  try {
+    const { isAvailable, restaurantId } = req.body;
     
-    if (!Array.isArray(itemIds) || isAvailable === undefined) {
+    if (isAvailable === undefined || !restaurantId) {
       return res.status(400).json({ 
-        error: 'Campos requeridos: itemIds (array), isAvailable (boolean)' 
+        error: 'Campos requeridos: isAvailable (boolean) y restaurantId' 
       });
     }
 
     const result = await MenuItem.updateMany(
-      { _id: { $in: itemIds } },
+      { restaurantId },
       { $set: { isAvailable } }
     );
 
     res.json({ 
-      message: 'Disponibilidad actualizada exitosamente',
+      message: 'Disponibilidad actualizada exitosamente para el restaurante',
       modifiedCount: result.modifiedCount
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al actualizar disponibilidad', 
-      details: error.message 
+    next(error);
+  }
+};
+
+/**
+ * UPDATE - Actualizar tags masivamente (para un restaurante)
+ * Soporta $addToSet (agregar tags a todos los items) y $pull (quitar tags)
+ */
+exports.bulkUpdateTags = async (req, res, next) => {
+  try {
+    const { action, tags, restaurantId } = req.body;
+    
+    if (!action || !['add', 'remove'].includes(action) || !Array.isArray(tags) || !restaurantId) {
+      return res.status(400).json({ 
+        error: 'Campos requeridos: action (add|remove), tags (array), restaurantId' 
+      });
+    }
+
+    if (tags.length === 0) {
+      return res.status(400).json({ error: 'La lista de tags no puede estar vacía' });
+    }
+
+    let updateQuery = {};
+    if (action === 'add') {
+      updateQuery = { $addToSet: { tags: { $each: tags } } };
+    } else {
+      updateQuery = { $pull: { tags: { $in: tags } } };
+    }
+
+    const result = await MenuItem.updateMany(
+      { restaurantId },
+      updateQuery
+    );
+
+    res.json({ 
+      message: `Tags ${action === 'add' ? 'agregados' : 'removidos'} masivamente con éxito`,
+      modifiedCount: result.modifiedCount
     });
+  } catch (error) {
+    next(error);
   }
 };

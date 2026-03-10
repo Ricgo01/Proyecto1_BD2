@@ -13,7 +13,7 @@ const Review = require('../models/Review');
 /**
  * GET - Analizar una query específica con explain()
  */
-exports.analyzeQuery = async (req, res) => {
+exports.analyzeQuery = async (req, res, next) => {
   try {
     const { collection, filter, limit = 10 } = req.body;
     
@@ -37,17 +37,14 @@ exports.analyzeQuery = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al analizar query', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * GET - Validar que una query use índices
  */
-exports.validateQuery = async (req, res) => {
+exports.validateQuery = async (req, res, next) => {
   try {
     const { collection, filter } = req.body;
     
@@ -70,17 +67,14 @@ exports.validateQuery = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al validar query', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * GET - Generar reporte de rendimiento de una colección
  */
-exports.getPerformanceReport = async (req, res) => {
+exports.getPerformanceReport = async (req, res, next) => {
   try {
     const { collection } = req.params;
     
@@ -98,17 +92,14 @@ exports.getPerformanceReport = async (req, res) => {
     res.json({ report });
 
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al generar reporte', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * POST - Comparar rendimiento de dos queries
  */
-exports.compareQueries = async (req, res) => {
+exports.compareQueries = async (req, res, next) => {
   try {
     const { collection, filterA, filterB } = req.body;
     
@@ -134,17 +125,14 @@ exports.compareQueries = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al comparar queries', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * GET - Demostración de queries con y sin índices
  */
-exports.demonstrateIndexUsage = async (req, res) => {
+exports.demonstrateIndexUsage = async (req, res, next) => {
   try {
     // 1. Query con índice: búsqueda por email
     const emailQuery = User.find({ email: 'test@example.com' });
@@ -203,10 +191,7 @@ exports.demonstrateIndexUsage = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error en demostración', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 

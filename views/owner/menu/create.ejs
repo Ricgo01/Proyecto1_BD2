@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Crear Item de Menu</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    .suggestion-box { position:absolute; z-index:1000; width:100%; max-height:200px; overflow-y:auto; }
+    .suggestion-item { cursor:pointer; padding:8px 12px; border-bottom:1px solid #eee; background:#fff; }
+    .suggestion-item:hover { background:#f0f4ff; }
+  </style>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+  <div class="container py-4" style="max-width:600px">
+    <a href="/menu" class="btn btn-sm btn-outline-secondary mb-3">← Volver</a>
+    <h2 class="mb-4">Nuevo Item de Menu</h2>
+    <div id="alert" class="d-none"></div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <form id="form-create">
+          <!-- Restaurant Dropdown -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Restaurante *</label>
+            <select id="restaurantId" class="form-select" required>
+              <option value="">-- Selecciona un restaurante --</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre *</label>
+            <input type="text" id="name" class="form-control" required placeholder="Ej: Taco de Carnitas"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Precio *</label>
+            <input type="number" id="price" class="form-control" required step="0.01" min="0" placeholder="35.50"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Foto del Platillo</label>
+            <input type="file" id="photo" class="form-control" accept="image/*"/>
+          </div>
+          <!-- Tags: multi-select from API + custom -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tags</label>
+            <select id="tags-select" class="form-select" multiple size="4"></select>
+            <div class="form-text">Ctrl/Cmd para seleccionar varios. Agrega nuevos abajo.</div>
+            <input type="text" id="tags-custom" class="form-control mt-2" placeholder="Tags adicionales (separados por coma)"/>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" id="isAvailable" class="form-check-input" checked/>
+            <label class="form-check-label" for="isAvailable">Disponible</label>
+          </div>
+          <button type="submit" class="btn btn-dark w-100">Crear Item</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let restTimer;
+
+    // Load tags
+    async function loadTags() {
+      try {
+        const res  = await fetch('/api/reports/distinct-values');
+        const data = await res.json();
+        const sel  = document.getElementById('tags-select');
+        (data.values?.tags || []).forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          sel.appendChild(opt);
+        });
+      } catch (_) {}
+    }
+
+    // Load Owner's Restaurants into Dropdown
+    async function loadOwnerRestaurants() {
+      const user = JSON.parse(localStorage.getItem('user'));
+      try {
+        const res = await fetch(`/api/restaurants?owner_id=${user.id}&limit=100`);
+        const data = await res.json();
+        const sel = document.getElementById('restaurantId');
+        if (data.restaurants) {
+          data.restaurants.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r._id;
+            opt.textContent = r.name;
+            sel.appendChild(opt);
+          });
+        }
+        
+        // Pre-fill from URL param if present
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('restaurantId')) {
+          sel.value = urlParams.get('restaurantId');
+        }
+      } catch (err) {
+        console.error("Error loading restaurants", err);
+      }
+    }
+
+    document.getElementById('form-create').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const alertEl = document.getElementById('alert');
+      const restaurantId = document.getElementById('restaurantId').value.trim();
+      if (!restaurantId) {
+        alertEl.className = 'alert alert-warning';
+        alertEl.textContent = 'Selecciona un restaurante de la lista';
+        alertEl.classList.remove('d-none');
+        return;
+      }
+      const selectedTags = Array.from(document.getElementById('tags-select').selectedOptions).map(o => o.value);
+      const customTags   = document.getElementById('tags-custom').value.split(',').map(t => t.trim()).filter(Boolean);
+      
+      let uploadedPhotoId = null;
+      const photoInput = document.getElementById('photo');
+      if (photoInput.files.length > 0) {
+        alertEl.className = 'alert alert-info';
+        alertEl.textContent = 'Subiendo foto pesada del platillo a GridFS...';
+        alertEl.classList.remove('d-none');
+        
+        const fd = new FormData();
+        fd.append('image', photoInput.files[0]);
+        
+        try {
+          const upRes = await fetch('/api/images/upload', { method: 'POST', body: fd });
+          const upData = await upRes.json();
+          if (upRes.ok) uploadedPhotoId = upData.fileId;
+          else throw new Error(upData.error);
+        } catch (e) {
+          alertEl.className = 'alert alert-danger';
+          alertEl.textContent = 'Error subiendo la foto: ' + e.message;
+          return;
+        }
+      }
+
+      const body = {
+        restaurantId,
+        name:        document.getElementById('name').value.trim(),
+        price:       parseFloat(document.getElementById('price').value),
+        photo:       uploadedPhotoId,
+        tags:        [...new Set([...selectedTags, ...customTags])],
+        isAvailable: document.getElementById('isAvailable').checked
+      };
+      const res  = await fetch('/api/menu-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alertEl.className = 'alert alert-success';
+        alertEl.textContent = `Item creado: ${data.menuItem.name}`;
+        alertEl.classList.remove('d-none');
+        setTimeout(() => window.location.href = `/menu?restaurantId=${body.restaurantId}`, 1500);
+      } else {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = data.error?.message || data.error || 'Error al crear';
+        alertEl.classList.remove('d-none');
+      }
+    });
+
+    loadTags();
+    loadOwnerRestaurants();
+  </script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Reportes</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+  <div class="container py-4">
+    <h2 class="mb-4">Reportes y Agregaciones</h2>
+
+    <div class="row g-4">
+      <!-- Stats generales -->
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header fw-bold">Estadísticas Generales <code>countDocuments</code></div>
+          <div class="card-body" id="stats-content">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- Top platillos -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header fw-bold">Top Platillos Mas Vendidos <code>$unwind → $group → $sort</code></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-secondary">
+                <tr><th>#</th><th>Platillo</th><th>Vendidos</th><th>Ingresos</th></tr>
+              </thead>
+              <tbody id="top-dishes-tbody">
+                <tr><td colspan="4" class="text-center text-muted py-3">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top clientes -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header fw-bold">Top Clientes por Gasto <code>$group → $sort → $lookup</code></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-secondary">
+                <tr><th>#</th><th>Cliente</th><th>Pedidos</th><th>Total Gastado</th></tr>
+              </thead>
+              <tbody id="top-customers-tbody">
+                <tr><td colspan="4" class="text-center text-muted py-3">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Valores distinct -->
+      <div class="col-md-6">
+        <div class="card shadow-sm">
+          <div class="card-header fw-bold">Valores Unicos <code>distinct</code></div>
+          <div class="card-body" id="distinct-content">Cargando...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    async function loadAll() {
+      // Stats generales
+      const statsRes  = await fetch('/api/reports/stats');
+      const statsData = await statsRes.json();
+      if (statsRes.ok) {
+        const s = statsData.stats;
+        document.getElementById('stats-content').innerHTML = `
+          <div class="row text-center g-2">
+            ${[['Restaurantes',s.totalRestaurants,'primary'],['Pedidos',s.totalOrders,'success'],
+               ['Reseñas',s.totalReviews,'warning'],['Items Menú',s.totalMenuItems,'info'],['Usuarios',s.totalUsers,'secondary']]
+              .map(([label,val,color])=>`
+              <div class="col"><div class="p-2 bg-${color} bg-opacity-10 rounded">
+                <div class="fw-bold fs-5">${val?.toLocaleString()??'—'}</div>
+                <div class="small text-muted">${label}</div>
+              </div></div>`).join('')}
+          </div>`;
+      }
+
+      // Top platillos
+      const dishRes  = await fetch('/api/reports/top-dishes?limit=10');
+      const dishData = await dishRes.json();
+      const dishTbody = document.getElementById('top-dishes-tbody');
+      if (dishRes.ok && dishData.dishes?.length) {
+        dishTbody.innerHTML = dishData.dishes.map((d,i) => `
+          <tr>
+            <td>${i+1}</td>
+            <td>${d.dishName || d._id || '—'}</td>
+            <td>${d.totalQuantitySold ?? '—'}</td>
+            <td>Q${(d.totalRevenue ?? 0).toFixed(2)}</td>
+          </tr>`).join('');
+      } else {
+        dishTbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center">Sin datos</td></tr>';
+      }
+
+      // Top clientes
+      const custRes  = await fetch('/api/reports/top-customers?limit=10');
+      const custData = await custRes.json();
+      const custTbody = document.getElementById('top-customers-tbody');
+      if (custRes.ok && custData.customers?.length) {
+        custTbody.innerHTML = custData.customers.map((c,i) => `
+          <tr>
+            <td>${i+1}</td>
+            <td>${c.userName || c.email || c._id || '—'}</td>
+            <td>${c.orderCount ?? '—'}</td>
+            <td>Q${(c.totalSpent ?? 0).toFixed(2)}</td>
+          </tr>`).join('');
+      } else {
+        custTbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center">Sin datos</td></tr>';
+      }
+
+      // Distinct
+      const distRes  = await fetch('/api/reports/distinct-values');
+      const distData = await distRes.json();
+      if (distRes.ok) {
+        const v = distData.values;
+        document.getElementById('distinct-content').innerHTML = `
+          <p class="mb-1"><strong>Categorías (${v.categories?.length ?? 0}):</strong>
+            ${(v.categories||[]).slice(0,15).map(c=>`<span class="badge bg-secondary me-1">${c}</span>`).join('')}
+            ${(v.categories?.length??0)>15?'<span class="text-muted">...</span>':''}
+          </p>
+          <p class="mb-1"><strong>Tags (${v.tags?.length ?? 0}):</strong>
+            ${(v.tags||[]).slice(0,15).map(t=>`<span class="badge bg-info text-dark me-1">${t}</span>`).join('')}
+            ${(v.tags?.length??0)>15?'<span class="text-muted">...</span>':''}
+          </p>`;
+      }
+
+    }
+
+    loadAll();
+  </script>
+</body>
+</html>

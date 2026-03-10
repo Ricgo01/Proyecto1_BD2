@@ -17,6 +17,7 @@ router.get('/:id', restaurantController.getRestaurantById);
 
 // UPDATE
 router.put('/:id', restaurantController.updateRestaurant);
+router.patch('/bulk/categories', restaurantController.bulkUpdateCategories);  // Admin: bulk category edit
 router.post('/:id/categories', restaurantController.addCategory);  // $addToSet
 router.delete('/:id/categories', restaurantController.removeCategory);  // $pull
 

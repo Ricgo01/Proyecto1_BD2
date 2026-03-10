@@ -7,6 +7,7 @@
  * - Consultas analíticas optimizadas
  */
 
+const mongoose   = require('mongoose');
 const Restaurant = require('../models/Restaurant');
 const Order      = require('../models/Order');
 const Review     = require('../models/Review');
@@ -157,7 +158,7 @@ const getTopSellingDishes = async (limit = 10) => {
  */
 const getMonthlySalesByRestaurant = async (restaurantId = null) => {
   const matchStage = restaurantId 
-    ? { $match: { restaurantId } }
+    ? { $match: { restaurantId: new mongoose.Types.ObjectId(restaurantId) } }
     : { $match: {} };
 
   return await Order.aggregate([

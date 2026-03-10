@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const path = require("path");
+const errorHandler = require("./src/middlewares/errorHandler");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,15 +24,22 @@ mongoose
   .catch((err) => console.error("Error al conectar a MongoDB:", err));
 
 // Importar rutas
-const apiRoutes = require("./src/routes");
+const apiRoutes  = require('./src/routes');
+const viewRoutes = require('./src/routes/viewRoutes');
+
+// Rutas de vistas EJS (antes de /api para no interceptar llamadas de API)
+app.use('/', viewRoutes);
 
 // Rutas de API
-app.use("/api", apiRoutes);
+app.use('/api', apiRoutes);
 
-// Rutas de vistas EJS
-app.get("/", (req, res) => {
-  res.render("index", { title: "Proyecto 1 - BD2" });
+// health check 
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// Middleware de manejo de errores
+app.use(errorHandler);
 
 // Levantar el servidor
 app.listen(PORT, () => {

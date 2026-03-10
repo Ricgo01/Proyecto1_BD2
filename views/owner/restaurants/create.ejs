@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Crear Restaurante</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    .suggestion-box { position:absolute; z-index:1000; width:100%; max-height:200px; overflow-y:auto; }
+    .suggestion-item { cursor:pointer; padding:8px 12px; border-bottom:1px solid #eee; background:#fff; }
+    .suggestion-item:hover { background:#f0f4ff; }
+  </style>
+</head>
+<body class="bg-light">
+  <%- include('../../partials/navbar') %>
+  <div class="container py-4" style="max-width:620px">
+    <a href="/restaurants" class="btn btn-sm btn-outline-secondary mb-3">← Volver</a>
+    <h2 class="mb-4">Nuevo Restaurante</h2>
+
+    <div id="alert" class="d-none"></div>
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <form id="form-create">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre *</label>
+            <input type="text" id="name" class="form-control" required placeholder="Ej: Tacos El Gordo"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Direccion *</label>
+            <input type="text" id="address" class="form-control" required placeholder="Av. Reforma 123, CDMX"/>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Logo / Imagen</label>
+            <input type="file" id="image" class="form-control" accept="image/*"/>
+            <div class="form-text">La imagen se subirá nativamente a GridFS.</div>
+          </div>
+
+          <!-- (El ID del Owner será automáticamente el mismo usuario creador) -->
+
+          <div class="row mb-3">
+            <div class="col">
+              <label class="form-label fw-semibold">Longitud *</label>
+              <input type="number" id="lng" class="form-control" step="any" required placeholder="-90.5133"/>
+            </div>
+            <div class="col">
+              <label class="form-label fw-semibold">Latitud *</label>
+              <input type="number" id="lat" class="form-control" step="any" required placeholder="14.6349"/>
+            </div>
+          </div>
+
+          <!-- Categories from API -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Categorias</label>
+            <select id="categories-select" class="form-select" multiple size="4"></select>
+            <div class="form-text">Mantén Ctrl (o Cmd) para seleccionar varias. Puedes agregar nuevas abajo.</div>
+            <input type="text" id="categories-custom" class="form-control mt-2" placeholder="Categorias adicionales (separadas por coma)"/>
+          </div>
+
+          <button type="submit" class="btn btn-dark w-100">Crear Restaurante</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let ownerTimer;
+
+    // Load existing categories
+    async function loadCategories() {
+      try {
+        const res  = await fetch('/api/reports/distinct-values');
+        const data = await res.json();
+        const sel  = document.getElementById('categories-select');
+        (data.values?.categories || []).forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c; opt.textContent = c;
+          sel.appendChild(opt);
+        });
+      } catch (_) {}
+    }
+
+    document.getElementById('form-create').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const alertEl = document.getElementById('alert');
+      const owner_id = JSON.parse(localStorage.getItem('user'))?.id;
+      
+      if (!owner_id) {
+        alertEl.className = 'alert alert-warning';
+        alertEl.textContent = 'Tu sesión es inválida. Inicia sesión de nuevo.';
+        alertEl.classList.remove('d-none');
+        return;
+      }
+
+      // Collect categories: selected from list + custom typed ones
+      const selectedOpts   = Array.from(document.getElementById('categories-select').selectedOptions).map(o => o.value);
+      const customCats     = document.getElementById('categories-custom').value.split(',').map(c => c.trim()).filter(Boolean);
+      const allCategories  = [...selectedOpts, ...customCats];
+      let uploadedImageId = null;
+      const imageInput = document.getElementById('image');
+      if (imageInput.files.length > 0) {
+        alertEl.className = 'alert alert-info';
+        alertEl.textContent = 'Subiendo imagen pesada a GridFS...';
+        alertEl.classList.remove('d-none');
+        
+        const fd = new FormData();
+        fd.append('image', imageInput.files[0]);
+        
+        try {
+          const upRes = await fetch('/api/images/upload', { method: 'POST', body: fd });
+          const upData = await upRes.json();
+          if (upRes.ok) uploadedImageId = upData.fileId;
+          else throw new Error(upData.error);
+        } catch (e) {
+          alertEl.className = 'alert alert-danger';
+          alertEl.textContent = 'Error subiendo la imagen: ' + e.message;
+          return;
+        }
+      }
+
+      const body = {
+        name:       document.getElementById('name').value.trim(),
+        address:    document.getElementById('address').value.trim(),
+        owner_id,
+        image:      uploadedImageId,
+        location: {
+          type: 'Point',
+          coordinates: [
+            parseFloat(document.getElementById('lng').value),
+            parseFloat(document.getElementById('lat').value)
+          ]
+        },
+        categories: allCategories
+      };
+
+      try {
+        const res  = await fetch('/api/restaurants', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          // Refrescar sesión local si el backend los ascendió de Customer a Owner
+          if (data.newRole) {
+            const userState = JSON.parse(localStorage.getItem('user'));
+            userState.role = data.newRole;
+            localStorage.setItem('user', JSON.stringify(userState));
+          }
+
+          alertEl.className = 'alert alert-success';
+          alertEl.textContent = `Restaurante creado: ${data.restaurant.name}. ${data.newRole ? '¡Felicidades, ahora eres un Owner!' : ''}`;
+          alertEl.classList.remove('d-none');
+          setTimeout(() => window.location.href = '/restaurants', 2000);
+        } else {
+          alertEl.className = 'alert alert-danger';
+          alertEl.textContent = data.error?.message || data.error || 'Error al crear';
+          alertEl.classList.remove('d-none');
+        }
+      } catch (err) {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = 'Error de conexion';
+        alertEl.classList.remove('d-none');
+      }
+    });
+
+    loadCategories();
+  </script>
+</body>
+</html>

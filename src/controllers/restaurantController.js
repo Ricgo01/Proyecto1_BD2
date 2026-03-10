@@ -8,9 +8,9 @@ const mongoose = require('mongoose');
 /**
  * CREATE - Crear nuevo restaurante
  */
-exports.createRestaurant = async (req, res) => {
+exports.createRestaurant = async (req, res, next) => {
   try {
-    const { name, address, owner_id, location, categories } = req.body;
+    const { name, address, owner_id, location, categories, image } = req.body;
     
     // Validación
     if (!name || !address || !owner_id || !location) {
@@ -24,20 +24,29 @@ exports.createRestaurant = async (req, res) => {
       address,
       owner_id,
       location,
-      categories: categories || []
+      categories: categories || [],
+      image: image || null
     });
     
     await restaurant.save();
+
+    // Promoción automática de Customer a Owner
+    let newRole = null;
+    const User = require('../models/User');
+    const user = await User.findById(owner_id);
+    if (user && user.role === 'customer') {
+      user.role = 'owner';
+      await user.save();
+      newRole = 'owner';
+    }
     
     res.status(201).json({ 
       message: 'Restaurante creado exitosamente', 
-      restaurant 
+      restaurant,
+      newRole
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al crear restaurante', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -45,11 +54,13 @@ exports.createRestaurant = async (req, res) => {
  * READ - Obtener todos los restaurantes
  * Soporta: filtros, proyección, ordenamiento, paginación
  */
-exports.getAllRestaurants = async (req, res) => {
+exports.getAllRestaurants = async (req, res, next) => {
   try {
     const { 
       category,
       minRating,
+      q,
+      owner_id,
       page = 1, 
       limit = 20, 
       sortBy = 'avgRating', 
@@ -59,8 +70,10 @@ exports.getAllRestaurants = async (req, res) => {
 
     // Construir filtro
     const filter = {};
-    if (category) filter.categories = category;
+    if (owner_id) filter.owner_id = owner_id;
+    if (category) filter.categories = { $regex: category, $options: 'i' };
     if (minRating) filter.avgRating = { $gte: parseFloat(minRating) };
+    if (q) filter.name = { $regex: q, $options: 'i' };
 
     // Proyección
     const projection = fields ? fields.split(',').join(' ') : '';
@@ -81,8 +94,21 @@ exports.getAllRestaurants = async (req, res) => {
       Restaurant.countDocuments(filter)
     ]);
 
+    // Agregaciones simples (Rúbrica)
+    const Order = require('../models/Order');
+    const MenuItem = require('../models/MenuItem');
+
+    const populatedRestaurants = await Promise.all(restaurants.map(async (r) => {
+      const restIdOid = new mongoose.Types.ObjectId(r._id);
+      const [orderCount, activeItemsCount] = await Promise.all([
+        Order.countDocuments({ restaurantId: restIdOid }),
+        MenuItem.countDocuments({ restaurantId: restIdOid, isAvailable: true })
+      ]);
+      return { ...r, orderCount, activeItemsCount };
+    }));
+
     res.json({
-      restaurants,
+      restaurants: populatedRestaurants,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -91,90 +117,102 @@ exports.getAllRestaurants = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener restaurantes', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Obtener restaurante por ID
  */
-exports.getRestaurantById = async (req, res) => {
+exports.getRestaurantById = async (req, res, next) => {
   try {
     const restaurant = await Restaurant.findById(req.params.id)
-      .populate('owner_id', 'name email');
+      .populate('owner_id', 'name email')
+      .lean();
     
     if (!restaurant) {
       return res.status(404).json({ error: 'Restaurante no encontrado' });
     }
     
+    // Agregaciones simples
+    const Order = require('../models/Order');
+    const MenuItem = require('../models/MenuItem');
+    
+    const restIdOid = new mongoose.Types.ObjectId(restaurant._id);
+    const [orderCount, activeItemsCount] = await Promise.all([
+      Order.countDocuments({ restaurantId: restIdOid }),
+      MenuItem.countDocuments({ restaurantId: restIdOid, isAvailable: true })
+    ]);
+    
+    restaurant.orderCount = orderCount;
+    restaurant.activeItemsCount = activeItemsCount;
+    
     res.json({ restaurant });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener restaurante', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Actualizar restaurante
  */
-exports.updateRestaurant = async (req, res) => {
+exports.updateRestaurant = async (req, res, next) => {
   try {
+    const requestingUserId = req.headers['x-user-id'];
+    const existing = await Restaurant.findById(req.params.id);
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Restaurante no encontrado' });
+    }
+    if (requestingUserId && existing.owner_id.toString() !== requestingUserId) {
+      return res.status(403).json({ error: 'No autorizado: no eres el dueño de este restaurante' });
+    }
+
     const updates = req.body;
-    
     const restaurant = await Restaurant.findByIdAndUpdate(
       req.params.id,
       updates,
       { new: true, runValidators: true }
     );
     
-    if (!restaurant) {
-      return res.status(404).json({ error: 'Restaurante no encontrado' });
-    }
-    
     res.json({ 
       message: 'Restaurante actualizado exitosamente', 
       restaurant 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al actualizar restaurante', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * DELETE - Eliminar restaurante
  */
-exports.deleteRestaurant = async (req, res) => {
+exports.deleteRestaurant = async (req, res, next) => {
   try {
-    const restaurant = await Restaurant.findByIdAndDelete(req.params.id);
-    
-    if (!restaurant) {
+    const requestingUserId = req.headers['x-user-id'];
+    const existing = await Restaurant.findById(req.params.id);
+
+    if (!existing) {
       return res.status(404).json({ error: 'Restaurante no encontrado' });
     }
-    
+    if (requestingUserId && existing.owner_id.toString() !== requestingUserId) {
+      return res.status(403).json({ error: 'No autorizado: no eres el dueño de este restaurante' });
+    }
+
+    await existing.deleteOne();
     res.json({ 
       message: 'Restaurante eliminado exitosamente', 
-      restaurant 
+      restaurant: existing 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar restaurante', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Búsqueda de texto en restaurantes
  */
-exports.searchRestaurants = async (req, res) => {
+exports.searchRestaurants = async (req, res, next) => {
   try {
     const { q, limit = 20 } = req.query;
     
@@ -196,17 +234,14 @@ exports.searchRestaurants = async (req, res) => {
       restaurants 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error en búsqueda de texto', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Búsqueda geoespacial (restaurantes cercanos)
  */
-exports.getNearbyRestaurants = async (req, res) => {
+exports.getNearbyRestaurants = async (req, res, next) => {
   try {
     const { lng, lat, maxDistance = 5000, limit = 20 } = req.query;
     
@@ -216,7 +251,7 @@ exports.getNearbyRestaurants = async (req, res) => {
       });
     }
 
-    const restaurants = await Restaurant.find({
+    const filter = {
       location: {
         $near: {
           $geometry: {
@@ -226,7 +261,13 @@ exports.getNearbyRestaurants = async (req, res) => {
           $maxDistance: parseInt(maxDistance)
         }
       }
-    })
+    };
+    
+    if (req.query.category) filter.categories = { $regex: req.query.category, $options: 'i' };
+    if (req.query.minRating) filter.avgRating = { $gte: parseFloat(req.query.minRating) };
+    if (req.query.q) filter.name = { $regex: req.query.q, $options: 'i' };
+
+    const restaurants = await Restaurant.find(filter)
       .limit(parseInt(limit))
       .lean();
 
@@ -234,25 +275,32 @@ exports.getNearbyRestaurants = async (req, res) => {
       center: { lng: parseFloat(lng), lat: parseFloat(lat) },
       maxDistance: parseInt(maxDistance),
       count: restaurants.length,
+      pagination: { pages: 1 },
       restaurants 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error en búsqueda geoespacial', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Agregar categoría única (usando $addToSet)
  */
-exports.addCategory = async (req, res) => {
+exports.addCategory = async (req, res, next) => {
   try {
     const { category } = req.body;
-    
+    const requestingUserId = req.headers['x-user-id'];
+
     if (!category) {
       return res.status(400).json({ error: 'Campo "category" requerido' });
+    }
+
+    const existing = await Restaurant.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Restaurante no encontrado' });
+    }
+    if (requestingUserId && existing.owner_id.toString() !== requestingUserId) {
+      return res.status(403).json({ error: 'No autorizado: no eres el dueño de este restaurante' });
     }
 
     const restaurant = await Restaurant.findByIdAndUpdate(
@@ -261,31 +309,33 @@ exports.addCategory = async (req, res) => {
       { new: true }
     );
     
-    if (!restaurant) {
-      return res.status(404).json({ error: 'Restaurante no encontrado' });
-    }
-    
     res.json({ 
       message: 'Categoría agregada exitosamente', 
       restaurant 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al agregar categoría', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Remover categoría
  */
-exports.removeCategory = async (req, res) => {
+exports.removeCategory = async (req, res, next) => {
   try {
     const { category } = req.body;
-    
+    const requestingUserId = req.headers['x-user-id'];
+
     if (!category) {
       return res.status(400).json({ error: 'Campo "category" requerido' });
+    }
+
+    const existing = await Restaurant.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Restaurante no encontrado' });
+    }
+    if (requestingUserId && existing.owner_id.toString() !== requestingUserId) {
+      return res.status(403).json({ error: 'No autorizado: no eres el dueño de este restaurante' });
     }
 
     const restaurant = await Restaurant.findByIdAndUpdate(
@@ -294,18 +344,55 @@ exports.removeCategory = async (req, res) => {
       { new: true }
     );
     
-    if (!restaurant) {
-      return res.status(404).json({ error: 'Restaurante no encontrado' });
-    }
-    
     res.json({ 
       message: 'Categoría removida exitosamente', 
       restaurant 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al remover categoría', 
-      details: error.message 
+    next(error);
+  }
+};
+
+/**
+ * UPDATE masivo - Agregar o remover categorías en múltiples restaurantes (Admin)
+ * Body: { restaurantIds: [...], addCategories: [...], removeCategories: [...] }
+ */
+exports.bulkUpdateCategories = async (req, res, next) => {
+  try {
+    const { restaurantIds, addCategories, removeCategories } = req.body;
+
+    if (!Array.isArray(restaurantIds) || !restaurantIds.length) {
+      return res.status(400).json({ error: 'restaurantIds debe ser un array no vacío' });
+    }
+    if (!addCategories?.length && !removeCategories?.length) {
+      return res.status(400).json({ error: 'Debes proporcionar addCategories o removeCategories' });
+    }
+
+    const filter = { _id: { $in: restaurantIds } };
+    let modifiedCount = 0;
+
+    // $addToSet y $pull no se pueden combinar en un solo updateMany sobre el mismo campo
+    if (addCategories?.length) {
+      const r = await Restaurant.updateMany(
+        filter,
+        { $addToSet: { categories: { $each: addCategories } } }
+      );
+      modifiedCount = Math.max(modifiedCount, r.modifiedCount);
+    }
+    if (removeCategories?.length) {
+      const r = await Restaurant.updateMany(
+        filter,
+        { $pull: { categories: { $in: removeCategories } } }
+      );
+      modifiedCount = Math.max(modifiedCount, r.modifiedCount);
+    }
+
+    res.json({
+      message: 'Categorías actualizadas exitosamente',
+      modifiedCount,
+      restaurantsAffected: restaurantIds.length
     });
+  } catch (error) {
+    next(error);
   }
 };

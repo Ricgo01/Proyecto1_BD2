@@ -10,7 +10,7 @@ const mongoose = require('mongoose');
  * CREATE - Crear nuevo pedido
  * Los items se almacenan con snapshot de precio/nombre
  */
-exports.createOrder = async (req, res) => {
+exports.createOrder = async (req, res, next) => {
   try {
     const { userId, restaurantId, items } = req.body;
     
@@ -63,10 +63,7 @@ exports.createOrder = async (req, res) => {
       order 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al crear pedido', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -74,12 +71,14 @@ exports.createOrder = async (req, res) => {
  * READ - Obtener pedidos
  * Soporta: filtros por usuario, restaurante, estado
  */
-exports.getAllOrders = async (req, res) => {
+exports.getAllOrders = async (req, res, next) => {
   try {
     const { 
       userId,
       restaurantId,
       status,
+      from,
+      to,
       page = 1, 
       limit = 20, 
       sortBy = 'createdAt', 
@@ -91,6 +90,11 @@ exports.getAllOrders = async (req, res) => {
     if (userId) filter.userId = userId;
     if (restaurantId) filter.restaurantId = restaurantId;
     if (status) filter.status = status;
+    if (from || to){
+      filter.createdAt = {};
+      if (from) filter.createdAt.$gte = new Date(from);
+      if (to) filter.createdAt.$lte = new Date(to);
+    }
 
     // Ordenamiento
     const sort = { [sortBy]: order === 'desc' ? -1 : 1 };
@@ -119,17 +123,14 @@ exports.getAllOrders = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener pedidos', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * READ - Obtener pedido por ID
  */
-exports.getOrderById = async (req, res) => {
+exports.getOrderById = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate('userId', 'name email')
@@ -141,17 +142,14 @@ exports.getOrderById = async (req, res) => {
     
     res.json({ order });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al obtener pedido', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * UPDATE - Actualizar estado del pedido
  */
-exports.updateOrderStatus = async (req, res) => {
+exports.updateOrderStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
     
@@ -177,17 +175,14 @@ exports.updateOrderStatus = async (req, res) => {
       order 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al actualizar estado del pedido', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * DELETE - Eliminar pedido
  */
-exports.deleteOrder = async (req, res) => {
+exports.deleteOrder = async (req, res, next) => {
   try {
     const order = await Order.findByIdAndDelete(req.params.id);
     
@@ -200,10 +195,7 @@ exports.deleteOrder = async (req, res) => {
       order 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar pedido', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -211,7 +203,7 @@ exports.deleteOrder = async (req, res) => {
  * UPDATE - Agregar item al pedido (usando $push)
  * Solo si el pedido está en estado 'created'
  */
-exports.addItemToOrder = async (req, res) => {
+exports.addItemToOrder = async (req, res, next) => {
   try {
     const { menuItemId, qty = 1 } = req.body;
     
@@ -245,24 +237,31 @@ exports.addItemToOrder = async (req, res) => {
       lineTotal: parseFloat(lineTotal.toFixed(2))
     };
 
-    // Agregar item y recalcular total
+    // Agregar item (en memoria temporal para recalcular totalAmount)
     order.items.push(newItem);
-    order.totalAmount = parseFloat(
+    const newTotalAmount = parseFloat(
       order.items.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2)
     );
-    order.updatedAt = Date.now();
-    
-    await order.save();
+
+    // Guardar usando el operador nativo $push de MongoDB
+    const updatedOrder = await Order.findByIdAndUpdate(
+      req.params.id,
+      { 
+        $push: { items: newItem },
+        $set: { 
+          totalAmount: newTotalAmount,
+          updatedAt: Date.now()
+        }
+      },
+      { new: true } // devuelve el documento actualizado
+    );
     
     res.json({ 
       message: 'Item agregado al pedido exitosamente', 
-      order 
+      order: updatedOrder 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al agregar item al pedido', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
@@ -270,7 +269,7 @@ exports.addItemToOrder = async (req, res) => {
  * UPDATE - Remover item del pedido (usando $pull)
  * Solo si el pedido está en estado 'created'
  */
-exports.removeItemFromOrder = async (req, res) => {
+exports.removeItemFromOrder = async (req, res, next) => {
   try {
     const { menuItemId } = req.body;
     
@@ -288,42 +287,54 @@ exports.removeItemFromOrder = async (req, res) => {
       });
     }
 
-    // Remover el item
-    order.items = order.items.filter(
+    // Remover el item en memoria para recalcular totalAmount
+    const updatedItems = order.items.filter(
       item => item.menuItemId.toString() !== menuItemId
     );
 
     // Recalcular total
-    order.totalAmount = parseFloat(
-      order.items.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2)
+    const newTotalAmount = parseFloat(
+      updatedItems.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2)
     );
-    order.updatedAt = Date.now();
-    
-    await order.save();
+
+    // Guardar usando el operador nativo $pull de MongoDB
+    const updatedOrder = await Order.findByIdAndUpdate(
+      req.params.id,
+      {
+        $pull: { items: { menuItemId: menuItemId } },
+        $set: {
+          totalAmount: newTotalAmount,
+          updatedAt: Date.now()
+        }
+      },
+      { new: true }
+    );
     
     res.json({ 
       message: 'Item removido del pedido exitosamente', 
-      order 
+      order: updatedOrder
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al remover item del pedido', 
-      details: error.message 
-    });
+    next(error);
   }
 };
 
 /**
  * DELETE - Eliminar múltiples pedidos cancelados antiguos
  */
-exports.deleteCancelledOrders = async (req, res) => {
+exports.deleteCancelledOrders = async (req, res, next) => {
   try {
-    const { monthsAgo = 6 } = req.query;
+    const { monthsAgo = 6, restaurantId } = req.query;
     
+    if (!restaurantId) {
+      return res.status(400).json({ error: 'restaurantId es requerido para esta limpieza' });
+    }
+
     const dateThreshold = new Date();
     dateThreshold.setMonth(dateThreshold.getMonth() - parseInt(monthsAgo));
 
     const result = await Order.deleteMany({
+      restaurantId,
       status: 'cancelled',
       updatedAt: { $lt: dateThreshold }
     });
@@ -333,9 +344,6 @@ exports.deleteCancelledOrders = async (req, res) => {
       deletedCount: result.deletedCount
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar pedidos cancelados', 
-      details: error.message 
-    });
+    next(error);
   }
 };
