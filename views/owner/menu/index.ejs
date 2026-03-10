@@ -171,6 +171,7 @@
           </td>
           <td>
             <a href="/menu/${m._id}/edit" class="btn btn-sm btn-outline-secondary">Editar</a>
+            <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteMenuItem('${m._id}')" title="Eliminar platillo">🗑️</button>
           </td>
         </tr>`).join('');
 
@@ -191,6 +192,40 @@
         alertEl.textContent = 'Error al actualizar disponibilidad';
         alertEl.classList.remove('d-none');
       }
+    }
+
+    async function deleteMenuItem(id) {
+      if (!confirm('¿Estás seguro de que deseas eliminar este platillo permanentemente?')) return;
+      
+      const alertEl = document.getElementById('alert');
+      try {
+        const res = await fetch(`/api/menu-items/${id}`, {
+          method: 'DELETE'
+        });
+        
+        if (res.ok) {
+          alertEl.className = 'alert alert-success';
+          alertEl.textContent = 'Platillo eliminado correctamente';
+          alertEl.classList.remove('d-none');
+          loadMenu(1); // Recargar la tabla
+        } else {
+          const data = await res.json();
+          alertEl.className = 'alert alert-danger';
+          alertEl.textContent = data.error || 'Error al eliminar el platillo';
+          alertEl.classList.remove('d-none');
+        }
+      } catch (err) {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = 'Error de red al intentar eliminar';
+        alertEl.classList.remove('d-none');
+      }
+      
+      // Ocultar alerta después de 3 segundos
+      setTimeout(() => {
+        if (!alertEl.classList.contains('d-none')) {
+          alertEl.classList.add('d-none');
+        }
+      }, 3000);
     }
 
     function renderPagination(totalPages, current) {
